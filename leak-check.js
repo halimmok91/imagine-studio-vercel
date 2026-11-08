@@ -33,19 +33,27 @@ const FORBIDDEN_IN_ERRORS = [
 
 function startMock(port) {
   const srv = http.createServer((req, res) => {
-    let body = "";
-    req.on("data", (c) => (body += c));
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
     req.on("end", () => {
+      const body = Buffer.concat(chunks);
+      // Record every request so the test can assert what actually reached the
+      // upstream - in particular whether the reference image survived.
+      srv.received = srv.received || [];
+      srv.received.push({
+        url: req.url,
+        contentType: req.headers["content-type"] || "",
+        body,
+        // Multipart: count the file parts. A reference that arrives as a real
+        // file part is the whole point of the edits endpoint.
+        fileParts: (body.toString("latin1").match(/Content-Disposition: form-data; name="image\[\]"/g) || []).length,
+      });
+
       // One upstream answers in English, one in Chinese, exactly like the real
       // pair. If the language reaches the client, the provider split leaks.
       const zh = port === 3002;
       const isModelList = req.url.endsWith("/models");
       const msg = zh ? "无效的令牌 (request id: abc123)" : "Invalid token (request id: abc123)";
-      if (isModelList) {
-        res.writeHead(401, { "content-type": "application/json" });
-        res.end(JSON.stringify({ error: { message: msg } }));
-        return;
-      }
       res.writeHead(401, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: { message: msg } }));
     });
@@ -186,6 +194,21 @@ function assertCleanError(label, res) {
     assert.ok(/temporarily unavailable/.test(res._json.error), res._json.error);
     assertClean("generate/disabled/" + id, res);
   }
+
+  // 8. A reference image must reach the upstream as a real multipart file
+  //    part. Sending it as a JSON `image` field is accepted by some relays but
+  //    the reference is silently dropped and the result is text-to-image.
+  const PNG_1PX = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  s1.received = [];
+  res = await call(handler, "POST", "/api/public/v1/generate",
+    { "x-app-password": "pw", authorization: "Bearer sk-testkey1234567890" },
+    { prompt: "hi", model_id: "m1", images: [PNG_1PX] });
+  const withRef = s1.received.filter((r) => r.url.includes("/images/edits"));
+  assert.ok(withRef.length > 0, "no /images/edits request reached the upstream");
+  assert.strictEqual(withRef[0].fileParts, 1,
+    "the reference must arrive as a multipart file part, got content-type " + withRef[0].contentType);
+  assert.ok(/multipart\/form-data/.test(withRef[0].contentType),
+    "edits must be multipart, got " + withRef[0].contentType);
 
   s1.close();
   s2.close();

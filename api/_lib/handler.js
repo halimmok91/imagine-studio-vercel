@@ -269,29 +269,64 @@ module.exports = async function handler(req, res) {
 
     const target = P.base + (refs.length ? "/v1/images/edits" : "/v1/images/generations");
 
+    function jsonBody(key) {
+      return {
+        headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      };
+    }
+
+    // Build the multipart body the OpenAI edits endpoint expects. The refs are
+    // data URLs, so decode each into a real file part.
+    function multipartBody(key) {
+      const form = new FormData();
+      form.append("model", payload.model);
+      form.append("prompt", payload.prompt);
+      form.append("n", String(payload.n));
+      if (payload.size) form.append("size", payload.size);
+      if (payload.output_format) form.append("output_format", payload.output_format);
+      if (payload.response_format) form.append("response_format", payload.response_format);
+      refs.forEach((ref) => {
+        const m = /^data:([^;]+);base64,(.*)$/s.exec(ref);
+        const bytes = Buffer.from(m ? m[2] : ref, "base64");
+        form.append("image[]", new Blob([bytes], { type: m ? m[1] : "image/png" }), "reference.png");
+      });
+      return { headers: { Authorization: "Bearer " + key }, body: form };
+    }
+
     let lastErr = "";
     for (let ki = 0; ki < keys.length; ki++) {
       const { key, src, how } = keys[ki];
       const more = ki < keys.length - 1;
-      let r, text;
-      try {
-        r = await fetch(target, {
-          method: "POST",
-          headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          // Hobby with Fluid Compute allows 300s. Keep this under vercel.json's
-          // maxDuration so Vercel never kills the request before the function
-          // can return the upstream error text.
-          signal: AbortSignal.timeout(Number(process.env.UPSTREAM_TIMEOUT_MS) || 240000),
-        });
-        text = await r.text();
-      } catch (e) {
-        if (more) { lastErr = "invalid header: " + scrub(e.message); continue; }
-        return json(res, 502, { error: "upstream unreachable: " + scrub(e.message) });
-      }
+      // multipart first, then JSON. One fallback attempt per key.
+      const attempts = refs.length ? ["multipart", "json"] : ["json"];
+      let r = null, text = "", j = null;
+      for (const shape of attempts) {
+        try {
+          r = await fetch(target, {
+            method: "POST",
+            ...(shape === "multipart" ? multipartBody(key) : jsonBody(key)),
+            // Hobby with Fluid Compute allows 300s. Keep this under vercel.json's
+            // maxDuration so Vercel never kills the request before the function
+            // can return the upstream error text.
+            signal: AbortSignal.timeout(Number(process.env.UPSTREAM_TIMEOUT_MS) || 240000),
+          });
+          text = await r.text();
+        } catch (e) {
+          if (more) { lastErr = "invalid header: " + scrub(e.message); r = null; break; }
+          return json(res, 502, { error: "upstream unreachable: " + scrub(e.message) });
+        }
 
-      let j = null;
-      try { j = JSON.parse(text); } catch (e) {}
+        j = null;
+        try { j = JSON.parse(text); } catch (e) {}
+
+        if (r.ok) break;
+        lastErr = scrub((j && (j.error?.message || j.message)) || text.slice(0, 300));
+        // Only retry the other body shape when the rejection looks like a
+        // request-format problem. A 401 is the key, not the shape, so stop.
+        if (r.status === 401) break;
+      }
+      if (!r) continue;
 
       if (!r.ok) {
         lastErr = scrub((j && (j.error?.message || j.message)) || text.slice(0, 300));
