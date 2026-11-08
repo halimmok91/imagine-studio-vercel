@@ -773,8 +773,8 @@ function buildSkeleton(job) {
 function updateSkeleton(job, statusText) {
   const el = $("#gallery").querySelector(`[data-job="${job.id}"]`);
   if (!el) return;
-  el.querySelector(".sk-pct").textContent = `${job.progress}%`;
-  el.querySelector(".sk-bar span").style.width = `${job.progress}%`;
+  el.querySelector(".sk-pct").textContent = Math.floor((Date.now() - job.start) / 1000) + "s";
+  el.querySelector(".sk-bar span").style.width = "60%";
   // Show the actual server status if available, so user sees what's happening
   const rawStatus = job.status || "";
   const displayStatus = statusText ||
@@ -1045,6 +1045,18 @@ async function startJob(params, idx) {
     done: null       // resolved when job finishes (success or fail) — used by seq mode
   };
   job.done = new Promise(res => { job._resolve = res; });
+  // Elapsed-time ticker. The server waits for the image in one request, so there
+  // is no real progress signal — show seconds elapsed instead of a frozen 0%.
+  job.ticker = setInterval(() => {
+    const el = $("#gallery").querySelector(`[data-job="${job.id}"]`);
+    if (!el) return;
+    const secs = Math.floor((Date.now() - job.start) / 1000);
+    const pct = el.querySelector(".sk-pct");
+    if (pct) pct.textContent = secs + "s";
+    const bar = el.querySelector(".sk-bar span");
+    // Indeterminate sweep up to 90%; never claims 100% before the image lands.
+    if (bar) bar.style.width = Math.min(90, 15 + (secs % 12) * 6) + "%";
+  }, 1000);
   state.jobs.set(job.id, job);
   const skel = buildSkeleton(job);
   // Tag the skeleton with the key position + tag so we can see which key each job used
@@ -1150,6 +1162,7 @@ function isRefExpiredError(msg) {
 }
 
 function finishJob(job, urls) {
+  clearInterval(job.ticker);
   const old = $("#gallery").querySelector(`[data-job="${job.id}"]`);
   if (!old || !urls.length) { if (!urls.length) failJob(job, "Finished without an image."); return; }
   const rec = {
@@ -1230,6 +1243,7 @@ function finishJob(job, urls) {
 }
 
 function failJob(job, message) {
+  clearInterval(job.ticker);
   const old = $("#gallery").querySelector(`[data-job="${job.id}"]`);
   state.jobs.delete(job.id);
   job._resolve && job._resolve();
@@ -1241,7 +1255,7 @@ function failJob(job, message) {
 async function removeCard(card) {
   const jid = card.dataset.job;
   const job = state.jobs.get(jid);
-  if (job) { job.cancelled = true; job._resolve && job._resolve(); }
+  if (job) { job.cancelled = true; clearInterval(job.ticker); job._resolve && job._resolve(); }
   state.jobs.delete(jid);
   const rec = card._rec;
   // No disk copy to clean up here — the serverless build downloads through the
