@@ -1,1 +1,1 @@
-module.exports = require("../../../_lib/handler.js");
+module.exports = require("../../_lib/handler.js");

@@ -15,35 +15,49 @@ files, import the repo, set env vars.
 
    | Name | Value | Needed |
    |---|---|---|
-   | `PROV1_KEY` | key for provider 1 | model m1 |
-   | `PROV1_BASE` | provider 1 base URL | model m1 |
-   | `PROV1_MODEL` | upstream model id for provider 1 | model m1 |
-   | `PROV2_KEY` | key for provider 2 | models m2–m4 |
-   | `PROV2_BASE` | provider 2 base URL | models m2–m4 |
-   | `PROV2_MODEL_1K` | upstream model id, 1K tier | model m2 |
-   | `PROV2_MODEL_2K` | upstream model id, 2K tier | model m3 |
-   | `PROV2_MODEL_4K` | upstream model id, 4K tier | model m4 |
    | `APP_PASSWORD` | site password | to lock the site |
    | `ADMIN_TOKEN` | admin secret | lets you use the server key |
 
-   Keys can also be pasted in the app's Settings panel — that path stores them
-   in the browser only, and the customer pays for their own quota.
+   Everything else — the relay base URLs and upstream model ids — also comes
+   from env vars. The full set is in `.env.local`:
 
-   Easiest path: fill `.env.local` (gitignored) with the values above and run
-   `push-env.ps1`. It sets every variable and redeploys.
+   | Name | Value |
+   |---|---|
+   | `PROV1_BASE` / `PROV1_KEY` / `PROV1_MODEL` | provider 1 |
+   | `PROV2_BASE` / `PROV2_KEY` | provider 2 |
+   | `PROV2_MODEL_1K` / `_2K` / `_4K` | provider 2 model ids |
+
+   The model ids contain non-ASCII characters (按次), so use `push-env.ps1`
+   rather than pasting them into the dashboard by hand — it reads and writes
+   UTF-8 and keeps them intact.
+
+   Customers can also paste their own key in the app's Settings panel — that
+   path stores it in the browser only and spends their relay quota, not yours.
+   The server-side key is only reachable with the admin token.
 5. Redeploy. Open the URL.
 
 ## Upstream identity is deliberately hidden
 
-Nothing in this repo names the upstream relay. The provider base URLs come from
-env vars, model ids are opaque (`m1`–`m4`), and the models response carries no
-host or provider field. Upstream error text is scrubbed of host names and model
-ids before it reaches the client. Keep it that way if you share this repo — a
-hostname in the source, the README, or a client-visible id undoes the whole thing.
+The client never sees which relay is behind the app. The public model ids are
+opaque (`m1`–`m4`), the models response carries no host, provider, or upstream
+model field, upstream error text is scrubbed of host names and model ids before
+it reaches the browser, and any CDN image URL the relay returns is fetched
+server-side and inlined as a data URL — so the relay's hostname never appears
+in the network tab.
 
-**Git history was purged.** The old host names were in earlier commits, so the
-history was rewritten and force-pushed. If you fork or re-share this repo,
-keep it that way — a hostname in any commit undoes the whole thing.
+The base URLs and model ids live in env vars, not in the source. Keep it that
+way if you share this repo — a hostname in the source, the README, or a
+client-visible id undoes the whole thing.
+
+## The handler is not a static file
+
+The shared handler lives at `api/_lib/handler.js`. Vercel ignores files that
+start with an underscore inside `api/`, so it is never routed and never served
+as source.
+
+**Do not move it to the repo root.** At `_lib/handler.js` in the root it WAS
+served — `https://your-site/_lib/handler.js` returned the whole server code.
+The `_lib` name is only safe because it sits inside `api/`.
 
 ## Password gate
 
@@ -53,7 +67,7 @@ both static file serving and `api/` function discovery. The symptom is a build
 that finishes in ~1s logging only `Compiling "middleware.js"`, followed by
 `404 NOT_FOUND` on every URL including `/api/public/v1/models`.
 
-The check lives in `_lib/handler.js` instead. `APP_PASSWORD` unset = gate off.
+The check lives in `api/_lib/handler.js` instead. `APP_PASSWORD` unset = gate off.
 
 ## Routing
 
@@ -68,8 +82,8 @@ api/public/v1/generate.js
 api/public/v1/verify.js
 ```
 
-each `module.exports = require("../../../_lib/handler.js")`. `_lib` is not a
-route directory, so shared logic there is safe.
+each `module.exports = require("../../_lib/handler.js")`. The leading
+underscore keeps Vercel from turning `_lib/handler.js` into a route.
 
 ## What changed from the desktop build
 
@@ -106,7 +120,7 @@ styles.css
 three-bg.js           animated background
 revamp.js
 vendor/three-0.160.0.min.js
-_lib/handler.js       shared handler logic
+api/_lib/handler.js  shared handler logic (never served: _ prefix inside api/)
 api/public/v1/*.js    one function per route
 vercel.json           maxDuration 300, memory 1024
 package.json          no dependencies

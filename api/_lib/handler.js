@@ -7,26 +7,34 @@
 //   2. No filesystem, so the six disk endpoints are gone. Save/Export use the
 //      browser's own download instead.
 
-// Upstream hosts AND upstream model names come from env vars only. Nothing in
-// this file names the relay or its model ids — those strings are searchable
-// and would undo the whole point of hiding the backend.
+// The upstream hosts and model names come from env vars only. Nothing in this
+// file names the relay - a hostname is searchable and would undo the whole
+// point of hiding the backend.
 //
-//   PROV1_BASE / PROV1_KEY / PROV1_MODEL
-//   PROV2_BASE / PROV2_KEY / PROV2_MODEL_1K / _2K / _4K
+// This file lives under api/_lib because Vercel ignores files starting with an
+// underscore inside api/, and never serves them as static files. At the repo
+// root it WAS served: https://your-site/_lib/handler.js returned the source.
+//
+// Every value also falls back to its old env var name, so a deployment that
+// still has the AIAPI_*/GOODAPI_* variables keeps working untouched:
+//
+//   PROV1_BASE / PROV1_KEY / PROV1_MODEL      (AIAPI_BASE / AIAPI_KEY / AIAPI_MODEL)
+//   PROV2_BASE / PROV2_KEY / PROV2_MODEL_1K   (GOODAPI_BASE / GOODAPI_KEY / GOODAPI_MODEL_1K)
+//                     _2K / _4K              (GOODAPI_MODEL_2K / GOODAPI_MODEL_4K)
 const PROVIDERS = {
   p1: {
-    base: (process.env.PROV1_BASE || "").replace(/\/+$/, ""),
+    base: (process.env.PROV1_BASE || process.env.AIAPI_BASE || "").replace(/\/+$/, ""),
     envVar: "PROV1_KEY",
+    oldEnvVar: "AIAPI_KEY",
     label: "provider 1",
   },
   p2: {
-    base: (process.env.PROV2_BASE || "").replace(/\/+$/, ""),
+    base: (process.env.PROV2_BASE || process.env.GOODAPI_BASE || "").replace(/\/+$/, ""),
     envVar: "PROV2_KEY",
+    oldEnvVar: "GOODAPI_KEY",
     label: "provider 2",
   },
 };
-
-const MODEL = process.env.PROV1_MODEL || "";
 
 // Provider 1 accepts only these three pixel sizes despite OpenAI's wider docs.
 const SIZES = { "1:1": "1024x1024", "16:9": "1536x864", "9:16": "864x1536" };
@@ -41,10 +49,10 @@ const GEMINI_RATIOS = [
 // lead straight to the relay, so the client only ever sees an opaque token and
 // the real model id stays in the server's env vars.
 const MODEL_ROWS = [
-  { id: "m1", model_id: MODEL, display_name: "GPT Image 2.5 · Sunburst", provider: "p1", ratios: Object.keys(SIZES) },
-  { id: "m2", model_id: process.env.PROV2_MODEL_1K || "", display_name: "Nano Banana 2 · 1K", provider: "p2", ratios: GEMINI_RATIOS },
-  { id: "m3", model_id: process.env.PROV2_MODEL_2K || "", display_name: "Nano Banana 2 · 2K", provider: "p2", ratios: GEMINI_RATIOS },
-  { id: "m4", model_id: process.env.PROV2_MODEL_4K || "", display_name: "Nano Banana 2 · 4K", provider: "p2", ratios: GEMINI_RATIOS },
+  { id: "m1", model_id: process.env.PROV1_MODEL || process.env.AIAPI_MODEL || "", display_name: "GPT Image 2.5 · Sunburst", provider: "p1", ratios: Object.keys(SIZES) },
+  { id: "m2", model_id: process.env.PROV2_MODEL_1K || process.env.GOODAPI_MODEL_1K || "", display_name: "Nano Banana 2 · 1K", provider: "p2", ratios: GEMINI_RATIOS },
+  { id: "m3", model_id: process.env.PROV2_MODEL_2K || process.env.GOODAPI_MODEL_2K || "", display_name: "Nano Banana 2 · 2K", provider: "p2", ratios: GEMINI_RATIOS },
+  { id: "m4", model_id: process.env.PROV2_MODEL_4K || process.env.GOODAPI_MODEL_4K || "", display_name: "Nano Banana 2 · 4K", provider: "p2", ratios: GEMINI_RATIOS },
 ];
 
 // provider is server-side routing info only — never sent to the client, so
@@ -87,7 +95,9 @@ function cleanKey(raw) {
 // ADMIN_TOKEN unset = env key unreachable from the API at all.
 function keyCandidates(req, provider) {
   const P = PROVIDERS[provider] || PROVIDERS.p1;
-  const envKey = process.env[P.envVar] || "";
+  // Fall back to the old env var name so a deployment that still has
+  // AIAPI_KEY / GOODAPI_KEY works without retyping a key.
+  const envKey = process.env[P.envVar] || process.env[P.oldEnvVar] || "";
   const adminTok = process.env.ADMIN_TOKEN || "";
   const isAdmin = adminTok && req.headers["x-admin-token"] === adminTok;
   const h = (req.headers["authorization"] || "").replace(/^Bearer\s+/i, "");
