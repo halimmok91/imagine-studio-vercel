@@ -151,7 +151,12 @@ const scrub = (s) => String(s || "")
   .replace(/未授权|权限不足/g, "Not authorized")
   .replace(/模型不存在|不存在该模型/g, "Model not available")
   .replace(/余额不足/g, "Insufficient balance")
-  .replace(/频率限制|过于频繁|请求频繁/g, "Rate limited");
+  .replace(/频率限制|过于频繁|请求频繁/g, "Rate limited")
+  // Anything still in Chinese would leak the upstream's language, and Chinese
+  // wording can name the relay or the model. Strip it all. What is left is
+  // either the English part of the message or nothing, which the caller
+  // replaces with a generic reason.
+  .replace(/[　-鿿＀-￯]/g, "");
 
 module.exports = async function handler(req, res) {
   const url = req.url.split("?")[0];

@@ -160,6 +160,16 @@ function assertCleanError(label, res) {
   assertClean("verify", res);
   assertCleanError("verify", res);
 
+  // 6. No Chinese may survive in any error text. The upstream's language is
+  //    the fingerprint that identifies which relay answered.
+  const cjk = /[　-鿿＀-￯]/;
+  for (const id of ["m1", "m2", "m3", "m4"]) {
+    res = await call(handler, "POST", "/api/public/v1/generate",
+      { "x-app-password": "pw", authorization: "Bearer sk-testkey1234567890" },
+      { prompt: "hi", model_id: id });
+    assert.ok(!cjk.test(String(res._json.error)), "generate/" + id + " left Chinese: " + res._json.error);
+  }
+
   s1.close();
   s2.close();
   console.log("leak-check: OK");
