@@ -13,31 +13,25 @@ if ($self -match '[^\x00-\x7F]') {
   throw "push-env.ps1 contains non-ASCII characters and will not parse on Windows PowerShell. Remove them."
 }
 
-# The Vercel CLI writes its banner and progress to stderr. With
-# ErrorActionPreference = Stop, PowerShell turns that into a terminating
-# NativeCommandError even when the command succeeded. Relax it around every
-# native call and rely on the exit code and captured output instead.
-function Invoke-Vercel {
-  param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Cmd)
+# Every Vercel CLI call goes through cmd /c as ONE string. Two reasons:
+#
+#   1. Calling the npm shim directly from PowerShell raises a terminating
+#      NativeCommandError, because vercel.ps1 writes its banner to stderr.
+#      cmd captures stderr instead.
+#   2. Passing arguments as an array to a PowerShell function drops the
+#      program name. `Invoke-Vercel vercel env rm $name` once ran as
+#      "D:\...\env rm ..." and reported "Could not find".
+#
+# cmd also passes stdin redirection through untouched, so the non-ASCII model
+# id survives. PowerShell's own pipe re-encodes with the console code page
+# (ASCII in Windows PowerShell 5.1) and corrupts it.
+function Run-Cmd {
+  param([string]$Line)
   $prev = $ErrorActionPreference
   $ErrorActionPreference = 'Continue'
   try {
-    if ($Cmd.Count -gt 1) { $out = & $Cmd[0] @($Cmd[1..($Cmd.Count - 1)]) 2>&1 | Out-String }
-    else { $out = & $Cmd[0] 2>&1 | Out-String }
-    return @{ code = $LASTEXITCODE; out = $out }
-  } finally { $ErrorActionPreference = $prev }
-}
-
-# Feed the value to `vercel env add` as raw bytes through cmd redirection.
-# PowerShell's own pipe re-encodes a string with the console code page (ASCII
-# in Windows PowerShell 5.1), which corrupts the non-ASCII model id.
-function Add-EnvVar {
-  param([string]$Name, [string]$TmpFile)
-  $prev = $ErrorActionPreference
-  $ErrorActionPreference = 'Continue'
-  try {
-    $out = cmd /c "vercel env add $Name production < `"$TmpFile`" 2>&1" 2>&1 | Out-String
-    return @{ code = $LASTEXITCODE; out = $out }
+    $out = cmd /c "$Line 2>&1"
+    return @{ code = $LASTEXITCODE; out = ($out -join "`n") }
   } finally { $ErrorActionPreference = $prev }
 }
 
@@ -61,7 +55,7 @@ foreach ($line in Get-Content .env.local -Encoding UTF8) {
 # Newer CLI versions write .vercel/repo.json, older ones .vercel/project.json.
 if (-not (Test-Path .vercel\project.json) -and -not (Test-Path .vercel\repo.json)) {
   Write-Host "Linking to your Vercel project..."
-  $r = Invoke-Vercel vercel link --yes
+  $r = Run-Cmd "vercel link --yes"
   if ($r.code -ne 0) { throw "vercel link failed`n$($r.out)" }
 }
 
@@ -74,21 +68,20 @@ foreach ($name in @('PROV1_BASE', 'PROV1_KEY', 'PROV1_MODEL', 'PROV2_BASE', 'PRO
   [System.IO.File]::WriteAllText($tmp, $val, (New-Object System.Text.UTF8Encoding $false))
 
   # `vercel env add` refuses to overwrite an existing value, so remove first.
-  # The remove is allowed to fail - it fails when the variable does not exist
+  # The remove is allowed to fail: it fails when the variable does not exist
   # yet, and the add below then succeeds anyway.
-  $rm = Invoke-Vercel vercel env rm $name production --yes
+  $rm = Run-Cmd "vercel env rm $name production --yes"
   Start-Sleep -Milliseconds 1500
 
-  $r = Add-EnvVar $name $tmp
+  $r = Run-Cmd "vercel env add $name production < `"$tmp`""
 
-  # The remove above can fail for reasons the CLI does not explain (the
-  # variable is protected, or the remove raced the add). If the add says the
-  # value already exists, remove again and retry once.
+  # If the add says the value already exists, the remove did not take effect.
+  # Remove again and retry once.
   if ($r.code -ne 0 -and $r.out -match 'already exists') {
     Write-Host "  $name already exists, removing and retrying..."
-    $rm = Invoke-Vercel vercel env rm $name production --yes
+    $rm = Run-Cmd "vercel env rm $name production --yes"
     Start-Sleep -Milliseconds 1500
-    $r = Add-EnvVar $name $tmp
+    $r = Run-Cmd "vercel env add $name production < `"$tmp`""
   }
 
   if ($r.code -eq 0) {
@@ -96,7 +89,7 @@ foreach ($name in @('PROV1_BASE', 'PROV1_KEY', 'PROV1_MODEL', 'PROV2_BASE', 'PRO
   } else {
     # Last check: the add may have succeeded but the CLI exited non-zero.
     # `vercel env ls` is the source of truth.
-    $ls = Invoke-Vercel vercel env ls production
+    $ls = Run-Cmd "vercel env ls production"
     if ($ls.out -match [regex]::Escape($name)) {
       Write-Host "OK $name (already present)"
     } else {
@@ -118,7 +111,11 @@ if ($failed.Count -gt 0) {
 }
 
 Write-Host ""
+Write-Host "Variables on Vercel:"
+(Run-Cmd "vercel env ls production").out
+
+Write-Host ""
 Write-Host "Done. Redeploying production..."
-$r = Invoke-Vercel vercel --prod --yes
+$r = Run-Cmd "vercel --prod --yes"
 if ($r.code -ne 0) { throw "vercel deploy failed`n$($r.out)" }
 Write-Host "Redeployed."
