@@ -1,7 +1,17 @@
 # Push the values in .env.local to Vercel's production environment.
 # Run:  powershell -ExecutionPolicy Bypass -File .\push-env.ps1
+#
+# THIS FILE MUST STAY PURE ASCII. Windows PowerShell reads .ps1 as ANSI, so a
+# single em-dash or CJK character in a comment corrupts the byte stream, eats
+# the closing quote, and the script dies with a parser error. It has happened
+# twice. If you edit this file, keep it ASCII.
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
+
+$self = Get-Content $PSCommandPath -Raw
+if ($self -match '[^\x00-\x7F]') {
+  throw "push-env.ps1 contains non-ASCII characters and will not parse on Windows PowerShell. Remove them."
+}
 
 if (-not (Get-Command vercel -ErrorAction SilentlyContinue)) {
   Write-Host "Installing Vercel CLI..."
@@ -11,7 +21,7 @@ if (-not (Get-Command vercel -ErrorAction SilentlyContinue)) {
 if (-not (Test-Path .env.local)) { throw ".env.local not found" }
 
 # Read as UTF8. Windows PowerShell defaults to ANSI and would corrupt the
-# non-ASCII model id (按次) - the upstream then rejects the model name.
+# non-ASCII model id (CJK chars) - the upstream then rejects the model name.
 $vars = @{}
 foreach ($line in Get-Content .env.local -Encoding UTF8) {
   if ($line -match '^\s*#' -or $line -notmatch '=') { continue }
