@@ -13,6 +13,20 @@ if ($self -match '[^\x00-\x7F]') {
   throw "push-env.ps1 contains non-ASCII characters and will not parse on Windows PowerShell. Remove them."
 }
 
+# The Vercel CLI writes its banner and progress to stderr. With
+# ErrorActionPreference = Stop, PowerShell turns that into a terminating
+# NativeCommandError even when the command succeeded. Relax it around every
+# native call and rely on the exit code instead.
+function Invoke-Native {
+  param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Cmd)
+  $prev = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    & $Cmd[0] @($Cmd[1..($Cmd.Count - 1)]) 2>&1 | Out-Null
+    return $LASTEXITCODE
+  } finally { $ErrorActionPreference = $prev }
+}
+
 if (-not (Get-Command vercel -ErrorAction SilentlyContinue)) {
   Write-Host "Installing Vercel CLI..."
   npm install -g vercel
@@ -30,9 +44,10 @@ foreach ($line in Get-Content .env.local -Encoding UTF8) {
 }
 
 # Link the local folder to the Vercel project if not already linked.
-if (-not (Test-Path .vercel\project.json)) {
-  Write-Host "Linking to your Vercel project (follow the prompts)..."
-  vercel link --yes
+# Newer CLI versions write .vercel/repo.json, older ones .vercel/project.json.
+if (-not (Test-Path .vercel\project.json) -and -not (Test-Path .vercel\repo.json)) {
+  Write-Host "Linking to your Vercel project..."
+  if ((Invoke-Native vercel link --yes) -ne 0) { throw "vercel link failed" }
 }
 
 # Each value goes through a UTF-8 file, never through the shell. Piping a
@@ -43,12 +58,23 @@ foreach ($name in @('PROV1_BASE', 'PROV1_KEY', 'PROV1_MODEL', 'PROV2_BASE', 'PRO
   $val = $vars[$name]
   if (-not $val) { Write-Host "Skipping $name (blank in .env.local)"; continue }
   [System.IO.File]::WriteAllText($tmp, $val, (New-Object System.Text.UTF8Encoding $false))
+
   # Remove then re-add: `vercel env add` refuses to overwrite an existing value.
-  vercel env rm $name production --yes 2>$null | Out-Null
-  Get-Content $tmp -Raw -Encoding UTF8 | vercel env add $name production
-  if ($LASTEXITCODE -eq 0) { Write-Host "OK $name" } else { throw "Failed: $name" }
+  # A missing variable is not an error here, so the exit code is ignored.
+  Invoke-Native vercel env rm $name production --yes | Out-Null
+
+  # vercel env add reads the value from stdin.
+  $prev = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    Get-Content $tmp -Raw -Encoding UTF8 | vercel env add $name production 2>&1 | Out-Null
+    $code = $LASTEXITCODE
+  } finally { $ErrorActionPreference = $prev }
+
+  if ($code -eq 0) { Write-Host "OK $name" } else { throw "Failed: $name (vercel env add exited $code)" }
 }
 Remove-Item $tmp -ErrorAction SilentlyContinue
 
 Write-Host "`nDone. Redeploying production..."
-vercel --prod --yes
+if ((Invoke-Native vercel --prod --yes) -ne 0) { throw "vercel deploy failed" }
+Write-Host "Redeployed."
