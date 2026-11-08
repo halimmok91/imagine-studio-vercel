@@ -2142,8 +2142,8 @@ document.addEventListener("keydown", e => {
   const legacy = localStorage.getItem(LS.key);
   if (!keys.length && legacy) keys = [legacy];
   state.settings.apiKeys = keys.filter(Boolean);
-  // Always same-origin. A stored value from an older build (e.g. the Mirava
-  // URL) would send every request somewhere else with a key attached.
+  // Always same-origin. A stored value from an older build (e.g. a direct
+  // upstream URL) would send every request somewhere else with a key attached.
   state.settings.baseUrl = REAL_BASE;
   try { localStorage.removeItem(LS.base); } catch (e) {}
   try { state.settings.autoSave = localStorage.getItem("imagine.autoSave") !== "0"; } catch (e) { state.settings.autoSave = true; }
