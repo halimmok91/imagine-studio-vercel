@@ -266,7 +266,7 @@
     <label class="field">
       <span class="label">Keys — one per line (round-robin)</span>
       <textarea id="apiKeysInput" rows="4" placeholder="sk-…&#10;sk-…" autocomplete="off" spellcheck="false"></textarea>
-      <span class="field-note">Keys for both sites go here — the adapter works out which site each one belongs to. Optional if a key is set in <code>key.txt</code> / <code>key-relay2.txt</code> next to the app, or in <code>RELAY1_KEY</code> / <code>RELAY2_KEY</code>; a file or env key wins, and this box is tried only if that one is rejected. Add several to spread requests across keys.</span>
+      <span class="field-note">Optional if keys are already set on the server. The adapter works out which backend each key belongs to. Add several to spread requests across keys.</span>
     </label>
     <label class="field" id="baseUrlField" hidden>
       <span class="label">Upstream base URL</span>
