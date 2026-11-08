@@ -17,21 +17,33 @@ files, import the repo, set env vars.
    |---|---|---|
    | `PROV1_KEY` | key for provider 1 | model m1 |
    | `PROV1_BASE` | provider 1 base URL | model m1 |
+   | `PROV1_MODEL` | upstream model id for provider 1 | model m1 |
    | `PROV2_KEY` | key for provider 2 | models m2–m4 |
    | `PROV2_BASE` | provider 2 base URL | models m2–m4 |
+   | `PROV2_MODEL_1K` | upstream model id, 1K tier | model m2 |
+   | `PROV2_MODEL_2K` | upstream model id, 2K tier | model m3 |
+   | `PROV2_MODEL_4K` | upstream model id, 4K tier | model m4 |
    | `APP_PASSWORD` | site password | to lock the site |
    | `ADMIN_TOKEN` | admin secret | lets you use the server key |
 
    Keys can also be pasted in the app's Settings panel — that path stores them
    in the browser only, and the customer pays for their own quota.
+
+   Easiest path: fill `.env.local` (gitignored) with the values above and run
+   `push-env.ps1`. It sets every variable and redeploys.
 5. Redeploy. Open the URL.
 
 ## Upstream identity is deliberately hidden
 
 Nothing in this repo names the upstream relay. The provider base URLs come from
 env vars, model ids are opaque (`m1`–`m4`), and the models response carries no
-host or provider field. Keep it that way if you share this repo — a hostname in
-the source, the README, or a client-visible id undoes the whole thing.
+host or provider field. Upstream error text is scrubbed of host names and model
+ids before it reaches the client. Keep it that way if you share this repo — a
+hostname in the source, the README, or a client-visible id undoes the whole thing.
+
+**Git history still contains the old host names.** They were in earlier commits.
+If the repo is public, anyone can find them with `git log -S`. Make the repo
+private, or rewrite history, before sharing the URL.
 
 ## Password gate
 
