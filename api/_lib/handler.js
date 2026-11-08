@@ -55,9 +55,14 @@ const MODEL_ROWS = [
   { id: "m4", model_id: process.env.PROV2_MODEL_4K || process.env.GOODAPI_MODEL_4K || "", display_name: "Nano Banana 2 · 4K", provider: "p2", ratios: GEMINI_RATIOS },
 ];
 
+// Temporarily take models offline without deleting their config: list the ids
+// here, e.g. ["m2","m3","m4"]. Disabled models are hidden from /models and
+// /generate refuses them. Empty = everything on.
+const DISABLED_MODELS = new Set(["m2", "m3", "m4"]);
+
 // provider is server-side routing info only — never sent to the client, so
 // the public models response can't reveal which relay backs each model.
-const MODELS = MODEL_ROWS.map((m) => ({
+const MODELS = MODEL_ROWS.filter((m) => !DISABLED_MODELS.has(m.id)).map((m) => ({
   id: m.id,
   display_name: m.display_name,
   enabled: true,
@@ -70,7 +75,11 @@ const MODELS = MODEL_ROWS.map((m) => ({
 
 function pickModel(raw) {
   const m = String(raw || "").trim();
-  return MODEL_ROWS.find((r) => r.id === m || r.model_id === m) || MODEL_ROWS[0];
+  const found = MODEL_ROWS.find((r) => r.id === m || r.model_id === m);
+  // Fall back to the first ENABLED model, never to a disabled one - otherwise
+  // a missing/unknown model id would silently route to an offline provider.
+  if (found) return found;
+  return MODEL_ROWS.find((r) => !DISABLED_MODELS.has(r.id)) || MODEL_ROWS[0];
 }
 
 // A key pasted from a web page carries zero-width / nbsp characters often
@@ -228,6 +237,9 @@ module.exports = async function handler(req, res) {
 
     const row = pickModel(b.model_id || b.model);
     const provider = row.provider;
+    if (DISABLED_MODELS.has(row.id)) {
+      return json(res, 503, { error: "This model is temporarily unavailable. Pick another model." });
+    }
     if (b.ratio && !row.ratios.includes(b.ratio)) {
       return json(res, 400, { error: "unsupported ratio for " + row.id + ": " + b.ratio });
     }

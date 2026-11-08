@@ -233,7 +233,10 @@ const FALLBACK_MODELS = [
 ];
 
 // Only these models are shown in the app.
-const ALLOWED_MODELS = new Set(["m1", "m2", "m3", "m4"]);
+// Temporarily offline for testers. Re-enable by restoring the set to
+// ["m1","m2","m3","m4"] here AND clearing DISABLED_MODELS in
+// api/_lib/handler.js - the server refuses disabled models too.
+const ALLOWED_MODELS = new Set(["m1"]);
 
 const state = {
   settings: { apiKeys: [], baseUrl: REAL_BASE, autoSave: true, saveFolder: "" },
