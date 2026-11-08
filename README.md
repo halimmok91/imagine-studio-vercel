@@ -22,6 +22,17 @@ files, import the repo, set two env vars.
    the app's Settings panel — that path stores them in the browser only.
 5. Redeploy. Open the URL.
 
+## Password gate
+
+**Do not add a root `middleware.js`.** Vercel's current CLI treats that file
+as a root proxy: it becomes the deployment's only entrypoint and suppresses
+both static file serving and `api/` function discovery. The symptom is a build
+that finishes in ~1s logging only `Compiling "middleware.js"`, followed by
+`404 NOT_FOUND` on every URL including `/api/public/v1/models`.
+
+To lock the deployment, check `APP_PASSWORD` inside `api/index.js` instead, or
+use Vercel's built-in Password Protection (Pro plan).
+
 ## What changed from the desktop build
 
 The desktop app is a long-running Node server with a filesystem. Vercel gives
