@@ -38,10 +38,11 @@ const MODEL_ROWS = [
   { id: "relay-two-image-4k", model_id: "relay-two-image-4k", display_name: "Nano Banana 2 · 4K", provider: "relay2", ratios: GEMINI_RATIOS },
 ];
 
+// provider is server-side routing info only — never sent to the client, so
+// the public models response can't reveal which relay backs each model.
 const MODELS = MODEL_ROWS.map((m) => ({
   id: m.id,
   display_name: m.display_name,
-  provider: m.provider,
   enabled: true,
   supports_reference_images: true,
   max_reference_images: 4,
@@ -110,9 +111,8 @@ module.exports = async function handler(req, res) {
     return json(res, 200, {
       models: MODELS,
       keyRequired: !keyed.relay1 && !keyed.relay2,
-      keyed,
-      upstream: PROVIDERS.relay1.base,
-      upstreams: { relay1: PROVIDERS.relay1.base, relay2: PROVIDERS.relay2.base },
+      // Deliberately no upstream/base URLs: this endpoint is public and must
+      // not reveal which relay is behind the app.
       model: MODEL,
     });
   }
@@ -163,7 +163,7 @@ module.exports = async function handler(req, res) {
     const P = PROVIDERS[provider];
     const keys = keyCandidates(req, provider);
     if (!keys.length) {
-      return json(res, 401, { error: "No key for " + P.label + ". Set " + P.envVar + " on the Vercel project, or paste a key in Settings." });
+      return json(res, 401, { error: "No API key configured for this model. Set " + P.envVar + " on the server, or paste a key in Settings." });
     }
 
     const size = provider === "relay2"
@@ -213,7 +213,7 @@ module.exports = async function handler(req, res) {
         // indistinguishable from a typo or the env key shadowing Settings.
         return json(res, r.status, {
           error: lastErr + "\n\nkey sent: " + maskKey(key) + " (" + key.length + " chars, " + how + ") from " + src +
-            " · model: " + row.model_id + " · site: " + P.base,
+            " · model: " + row.model_id,
         });
       }
 

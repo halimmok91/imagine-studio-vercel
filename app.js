@@ -418,13 +418,8 @@ async function loadModels() {
     // The server tells us whether it already holds a key. If it does, the
     // Settings box is optional and we don't nag the user for one.
     state.keyRequired = data.keyRequired !== false;
-    // Surface the upstream the adapter is actually pointed at. Read-only:
-    // sending requests straight there would bypass the server and put the key
-    // in the browser.
-    const ups = data.upstreams || {};
-    state.upstream = Object.values(ups).join("  +  ") || data.upstream || "";
-    const bu = $("#baseUrlInput");
-    if (bu) bu.value = state.upstream;
+    // Don't surface upstream hosts anywhere in the UI — users of a shared link
+    // shouldn't see which relay is behind the app.
     const list = (data.models || []).filter(m => m.enabled !== false && m.id && ALLOWED_MODELS.has(m.id));
     if (!list.length) throw new ApiError(500, "No models available.");
     state.models = list;
@@ -484,9 +479,7 @@ function applyModel() {
     syncRefUI();
   }
 
-  const site = m.provider === "relay2" ? "relay-two.invalid" : m.provider === "relay1" ? "relay-one.invalid" : "";
-  $("#modelHint").textContent = [site, refsOk ? `up to ${m.max_reference_images || 6} refs` : "no references"]
-    .filter(Boolean).join(" · ");
+  $("#modelHint").textContent = refsOk ? `up to ${m.max_reference_images || 6} refs` : "no references";
   renderOptionGroups();
 }
 

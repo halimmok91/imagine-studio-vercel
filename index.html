@@ -268,10 +268,10 @@
       <textarea id="apiKeysInput" rows="4" placeholder="sk-…&#10;sk-…" autocomplete="off" spellcheck="false"></textarea>
       <span class="field-note">Keys for both sites go here — the adapter works out which site each one belongs to. Optional if a key is set in <code>key.txt</code> / <code>key-relay2.txt</code> next to the app, or in <code>RELAY1_KEY</code> / <code>RELAY2_KEY</code>; a file or env key wins, and this box is tried only if that one is rejected. Add several to spread requests across keys.</span>
     </label>
-    <label class="field">
+    <label class="field" id="baseUrlField" hidden>
       <span class="label">Upstream base URL</span>
-      <input type="text" id="baseUrlInput" placeholder="https://relay-one.invalid  +  https://relay-two.invalid" spellcheck="false" readonly>
-      <span class="field-note">Fixed. Each model calls its own site's <code>/v1/images/generations</code> or <code>/v1/images/edits</code>. Change them with <code>RELAY1_BASE</code> / <code>RELAY2_BASE</code>, not here — a value typed in this box would bypass the server and expose your key to the browser.</span>
+      <input type="text" id="baseUrlInput" spellcheck="false" readonly>
+      <span class="field-note">Fixed on the server.</span>
     </label>
     <hr class="field-sep">
     <div class="field">
