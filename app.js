@@ -4,7 +4,7 @@ const $ = s => document.querySelector(s);
 // Same-origin: server.js serves the adapter at /api/*. Leave blank so every
 // request goes to this app's own server, which holds the key.
 const REAL_BASE = "";
-const LS = { key: "studio.apiKey", keys: "studio.apiKeys", base: "studio.baseUrl", model: "studio.model", hist: "studio.history", batch: "studio.batch", delay: "studio.delay", seq: "studio.seq", sort: "studio.sort", promptHistory: "studio.promptHistory" };
+const LS = { key: "imagine.apiKey", keys: "imagine.apiKeys", base: "imagine.baseUrl", model: "imagine.model", hist: "imagine.history", batch: "imagine.batch", delay: "imagine.delay", seq: "imagine.seq", sort: "imagine.sort", promptHistory: "imagine.promptHistory" };
 const MAX_PROMPT = 10000;
 // Reference uploads expire server-side; re-upload any ref older than this before generating.
 const REF_MAX_AGE_MS = 45000;
@@ -14,7 +14,7 @@ const REF_MAX_AGE_MS = 45000;
 // record's gid. Local copies survive CDN URL expiry and let the gallery render
 // instantly without hitting the network. Without this, every "Link expired"
 // card is permanently invisible.
-const IMG_DB = "studioStudio", IMG_STORE = "imgs", KV_STORE = "kv";
+const IMG_DB = "imagineStudio", IMG_STORE = "imgs", KV_STORE = "kv";
 let imgDbPromise = null;
 function imgDb() {
   if (imgDbPromise) return imgDbPromise;
@@ -199,7 +199,7 @@ function saveBlobToDisk(blob, meta) {
   if (!blob) return { ok: false, error: "no blob" };
   try {
     const ext = (blob.type && /jpe?g/i.test(blob.type)) ? "jpg" : "png";
-    const name = `studio_${(meta && meta.gid) || Date.now()}.${ext}`;
+    const name = `imagine_${(meta && meta.gid) || Date.now()}.${ext}`;
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = name;
@@ -226,19 +226,14 @@ const LUCID_STYLES = ["dynamic", "creative", "fashion", "portrait", "cinematic",
 const SHORT_STYLES = ["dynamic", "creative", "fashion", "cinematic", "portrait", "stock-photo", "vibrant"];
 
 const FALLBACK_MODELS = [
-  { id: "gpt-image-2.5", display_name: "GPT Image 2.5 · Studio  ¥0.014", provider: "relay1", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1", "16:9", "9:16"], styles: [] },
-  { id: "relay-two-image", display_name: "Relay Image · 1K  $0.05", provider: "relay2", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9","1:4","4:1","1:8","8:1"], styles: [] },
-  { id: "relay-two-image-2k", display_name: "Relay Image · 2K  $0.06", provider: "relay2", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9","1:4","4:1","1:8","8:1"], styles: [] },
-  { id: "relay-two-image-4k", display_name: "Relay Image · 4K  $0.07", provider: "relay2", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9","1:4","4:1","1:8","8:1"], styles: [] }
+  { id: "m1", display_name: "GPT Image 2.5", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1", "16:9", "9:16"], styles: [] },
+  { id: "m2", display_name: "Nano Banana 2 · 1K", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9","1:4","4:1","1:8","8:1"], styles: [] },
+  { id: "m3", display_name: "Nano Banana 2 · 2K", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9","1:4","4:1","1:8","8:1"], styles: [] },
+  { id: "m4", display_name: "Nano Banana 2 · 4K", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9","1:4","4:1","1:8","8:1"], styles: [] }
 ];
 
 // Only these models are shown in the app.
-const ALLOWED_MODELS = new Set([
-  "gpt-image-2.5",
-  "relay-two-image",
-  "relay-two-image-2k",
-  "relay-two-image-4k",
-]);
+const ALLOWED_MODELS = new Set(["m1", "m2", "m3", "m4"]);
 
 const state = {
   settings: { apiKeys: [], baseUrl: REAL_BASE, autoSave: true, saveFolder: "" },
@@ -295,7 +290,7 @@ function nextKey() {
   if (typeof state.keyIdx !== "number" || isNaN(state.keyIdx)) state.keyIdx = 0;
   const idx = state.keyIdx % keys.length;
   state.keyIdx = (state.keyIdx + 1) % keys.length;
-  try { localStorage.setItem("studio.keyIdx", String(state.keyIdx)); } catch (e) {}
+  try { localStorage.setItem("imagine.keyIdx", String(state.keyIdx)); } catch (e) {}
   return { key: keys[idx], idx };
 }
 
@@ -1474,8 +1469,8 @@ function saveFilterState() {
   clearTimeout(saveFilterTimer);
   saveFilterTimer = setTimeout(() => {
     try {
-      localStorage.setItem("studio.gallerySearch", state.gallerySearch || "");
-      localStorage.setItem("studio.galleryTags", JSON.stringify(state.galleryTags || []));
+      localStorage.setItem("imagine.gallerySearch", state.gallerySearch || "");
+      localStorage.setItem("imagine.galleryTags", JSON.stringify(state.galleryTags || []));
     } catch (e) {}
   }, 300);
 }
@@ -1753,7 +1748,7 @@ $("#btnSaveSettings").addEventListener("click", () => {
   state.settings.autoSave = !!$("#autoSaveToggle").checked;
   localStorage.setItem(LS.keys, JSON.stringify(raw));
   localStorage.setItem(LS.base, state.settings.baseUrl);
-  localStorage.setItem("studio.autoSave", state.settings.autoSave ? "1" : "0");
+  localStorage.setItem("imagine.autoSave", state.settings.autoSave ? "1" : "0");
   // Mirror to IDB for recoverability.
   kvPut("apiKeys", JSON.stringify(raw));
   kvPut("baseUrl", state.settings.baseUrl);
@@ -2070,7 +2065,7 @@ $("#sortSelect")?.addEventListener("change", e => {
   const MIN_W = 260, MAX_W = 700;
   // Restore saved width.
   let saved = 0;
-  try { saved = parseInt(localStorage.getItem("studio.composerW") || "0", 10) || 0; } catch (e) {}
+  try { saved = parseInt(localStorage.getItem("imagine.composerW") || "0", 10) || 0; } catch (e) {}
   if (saved >= MIN_W && saved <= MAX_W) layout.style.setProperty("--composer-w", saved + "px");
 
   let dragging = false;
@@ -2095,7 +2090,7 @@ $("#sortSelect")?.addEventListener("change", e => {
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
     const w = parseInt(getComputedStyle(layout).getPropertyValue("--composer-w"), 10) || 344;
-    try { localStorage.setItem("studio.composerW", String(w)); } catch (e) {}
+    try { localStorage.setItem("imagine.composerW", String(w)); } catch (e) {}
   });
 })();
 
@@ -2151,9 +2146,9 @@ document.addEventListener("keydown", e => {
   // URL) would send every request somewhere else with a key attached.
   state.settings.baseUrl = REAL_BASE;
   try { localStorage.removeItem(LS.base); } catch (e) {}
-  try { state.settings.autoSave = localStorage.getItem("studio.autoSave") !== "0"; } catch (e) { state.settings.autoSave = true; }
-  try { state.settings.saveFolder = localStorage.getItem("studio.saveFolder") || ""; } catch (e) { state.settings.saveFolder = ""; }
-  try { state.keyIdx = parseInt(localStorage.getItem("studio.keyIdx") || "0", 10) || 0; } catch (e) { state.keyIdx = 0; }
+  try { state.settings.autoSave = localStorage.getItem("imagine.autoSave") !== "0"; } catch (e) { state.settings.autoSave = true; }
+  try { state.settings.saveFolder = localStorage.getItem("imagine.saveFolder") || ""; } catch (e) { state.settings.saveFolder = ""; }
+  try { state.keyIdx = parseInt(localStorage.getItem("imagine.keyIdx") || "0", 10) || 0; } catch (e) { state.keyIdx = 0; }
   try { state.batch = Math.max(1, Math.min(4, parseInt(localStorage.getItem(LS.batch) || "1", 10) || 1)); } catch (e) { state.batch = 1; }
   try { state.delayMs = Math.max(0, Math.min(60000, parseInt(localStorage.getItem(LS.delay) || "0", 10) || 0)); } catch (e) { state.delayMs = 0; }
   try { state.seq = localStorage.getItem(LS.seq) === "1"; } catch (e) { state.seq = false; }
@@ -2161,8 +2156,8 @@ document.addEventListener("keydown", e => {
   // Restore prompt history (the list that powers the ▾ dropdown)
   state.promptHistory = loadPromptHistory();
   // Restore gallery filter state
-  try { state.gallerySearch = localStorage.getItem("studio.gallerySearch") || ""; } catch (e) { state.gallerySearch = ""; }
-  try { state.galleryTags = JSON.parse(localStorage.getItem("studio.galleryTags") || "[]"); } catch (e) { state.galleryTags = []; }
+  try { state.gallerySearch = localStorage.getItem("imagine.gallerySearch") || ""; } catch (e) { state.gallerySearch = ""; }
+  try { state.galleryTags = JSON.parse(localStorage.getItem("imagine.galleryTags") || "[]"); } catch (e) { state.galleryTags = []; }
   const searchInput = $("#gallerySearch");
   if (searchInput) searchInput.value = state.gallerySearch;
   const sortSel = $("#sortSelect");

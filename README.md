@@ -1,7 +1,7 @@
 # Imagine Studio — Vercel build
 
 Same UI as the desktop app, ported to run on Vercel. No build step: push the
-files, import the repo, set two env vars.
+files, import the repo, set env vars.
 
 ## Deploy
 
@@ -15,12 +15,23 @@ files, import the repo, set two env vars.
 
    | Name | Value | Needed |
    |---|---|---|
-   | `RELAY1_KEY` | your relay-one.invalid key | for Studio |
-   | `RELAY2_KEY` | your relay-two.invalid key | for the Gemini rows |
+   | `PROV1_KEY` | key for provider 1 | model m1 |
+   | `PROV1_BASE` | provider 1 base URL | model m1 |
+   | `PROV2_KEY` | key for provider 2 | models m2–m4 |
+   | `PROV2_BASE` | provider 2 base URL | models m2–m4 |
+   | `APP_PASSWORD` | site password | to lock the site |
+   | `ADMIN_TOKEN` | admin secret | lets you use the server key |
 
-   You only need the one(s) whose models you'll use. Keys can also be pasted in
-   the app's Settings panel — that path stores them in the browser only.
+   Keys can also be pasted in the app's Settings panel — that path stores them
+   in the browser only, and the customer pays for their own quota.
 5. Redeploy. Open the URL.
+
+## Upstream identity is deliberately hidden
+
+Nothing in this repo names the upstream relay. The provider base URLs come from
+env vars, model ids are opaque (`m1`–`m4`), and the models response carries no
+host or provider field. Keep it that way if you share this repo — a hostname in
+the source, the README, or a client-visible id undoes the whole thing.
 
 ## Password gate
 
@@ -30,13 +41,28 @@ both static file serving and `api/` function discovery. The symptom is a build
 that finishes in ~1s logging only `Compiling "middleware.js"`, followed by
 `404 NOT_FOUND` on every URL including `/api/public/v1/models`.
 
-To lock the deployment, check `APP_PASSWORD` inside `api/index.js` instead, or
-use Vercel's built-in Password Protection (Pro plan).
+The check lives in `_lib/handler.js` instead. `APP_PASSWORD` unset = gate off.
+
+## Routing
+
+Vercel zero-config maps files to URLs literally, and dynamic segments match
+one path segment only (`[^/]+`). So `api/[...path].js` catches `/api/abc` but
+not `/api/public/v1/models`. Real catch-alls are a Next.js feature. Hence one
+file per route:
+
+```
+api/public/v1/models.js
+api/public/v1/generate.js
+api/public/v1/verify.js
+```
+
+each `module.exports = require("../../../_lib/handler.js")`. `_lib` is not a
+route directory, so shared logic there is safe.
 
 ## What changed from the desktop build
 
 The desktop app is a long-running Node server with a filesystem. Vercel gives
-you a stateless function with a 60-second wall, so three things had to move:
+you a stateless function with a 300-second wall, so three things had to move:
 
 **Generate is synchronous.** The old flow was `POST → generation_id → poll`.
 Job state lived in a `Map` in memory, which a serverless function cannot keep
@@ -52,14 +78,12 @@ Vercel's 4.5 MB body cap. If you ever raise `REF_MAX_PX`, re-check that cap.
 "Save" now downloads through the browser; the folder picker and Re-import
 button are removed. The gallery still persists — it lives in IndexedDB.
 
-## Timeout ceiling
+## Timeout
 
-`vercel.json` sets `maxDuration: 60`, which is the Hobby maximum. The upstream
-call is capped at 55s so it can return a real error instead of a bare 504.
-
-`gpt-image-2.5-relay-one` renders in ~30s at default quality, so this is
-fine. If you ever move to a quality tier that renders in ~140s you need Vercel
-Pro (300s) — raise both numbers together.
+`vercel.json` sets `maxDuration: 300` (Hobby's limit with Fluid Compute). The
+upstream call is capped below that so it returns a real error instead of a bare
+504. A slow quality tier may need more headroom than the default upstream
+timeout allows — raise both together.
 
 ## Files
 
@@ -70,7 +94,8 @@ styles.css
 three-bg.js           animated background
 revamp.js
 vendor/three-0.160.0.min.js
-api/index.js          the only serverless function
-vercel.json           maxDuration 60, memory 1024
+_lib/handler.js       shared handler logic
+api/public/v1/*.js    one function per route
+vercel.json           maxDuration 300, memory 1024
 package.json          no dependencies
 ```

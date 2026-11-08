@@ -23,7 +23,7 @@ if (-not (Test-Path .vercel\project.json)) {
   vercel link --yes
 }
 
-foreach ($name in @('RELAY1_KEY', 'RELAY2_KEY')) {
+foreach ($name in @('PROV1_BASE', 'PROV1_KEY', 'PROV1_MODEL', 'PROV2_BASE', 'PROV2_KEY', 'PROV2_MODEL_1K', 'PROV2_MODEL_2K', 'PROV2_MODEL_4K', 'APP_PASSWORD', 'ADMIN_TOKEN')) {
   $val = $vars[$name]
   if (-not $val) { Write-Host "Skipping $name (empty in .env.local)"; continue }
   # Remove then re-add: `vercel env add` refuses to overwrite an existing value.

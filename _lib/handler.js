@@ -1,41 +1,50 @@
 "use strict";
 
-// Serverless port of the Studio adapter. Two differences from the desktop
+// Serverless port of the desktop adapter. Two differences from the desktop
 // build, both forced by Vercel:
 //   1. No shared memory between invocations, so `generate` is SYNCHRONOUS. The
 //      old POST -> generation_id -> poll dance cannot survive a cold start.
 //   2. No filesystem, so the six disk endpoints are gone. Save/Export use the
 //      browser's own download instead.
 
+// Upstream hosts AND upstream model names come from env vars only. Nothing in
+// this file names the relay or its model ids — those strings are searchable
+// and would undo the whole point of hiding the backend.
+//
+//   PROV1_BASE / PROV1_KEY / PROV1_MODEL
+//   PROV2_BASE / PROV2_KEY / PROV2_MODEL_1K / _2K / _4K
 const PROVIDERS = {
-  relay1: {
-    base: (process.env.RELAY1_BASE || "https://relay-one.invalid").replace(/\/+$/, ""),
-    envVar: "RELAY1_KEY",
-    label: "relay-one.invalid",
+  p1: {
+    base: (process.env.PROV1_BASE || "").replace(/\/+$/, ""),
+    envVar: "PROV1_KEY",
+    label: "provider 1",
   },
-  relay2: {
-    base: (process.env.RELAY2_BASE || "https://relay-two.invalid").replace(/\/+$/, ""),
-    envVar: "RELAY2_KEY",
-    label: "relay-two.invalid",
+  p2: {
+    base: (process.env.PROV2_BASE || "").replace(/\/+$/, ""),
+    envVar: "PROV2_KEY",
+    label: "provider 2",
   },
 };
 
-const MODEL = process.env.RELAY1_MODEL || "gpt-image-2.5-relay-one";
+const MODEL = process.env.PROV1_MODEL || "";
 
-// relay-one.invalid accepts only these three pixel sizes despite OpenAI's wider docs.
+// Provider 1 accepts only these three pixel sizes despite OpenAI's wider docs.
 const SIZES = { "1:1": "1024x1024", "16:9": "1536x864", "9:16": "864x1536" };
 
-// Gemini takes 14 ratios and wants the ratio string in `size`, not pixels.
+// Provider 2 takes 14 ratios and wants the ratio string in `size`, not pixels.
 const GEMINI_RATIOS = [
   "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4",
   "9:16", "16:9", "21:9", "1:4", "4:1", "1:8", "8:1",
 ];
 
+// The public id is opaque on purpose. Upstream model names are searchable and
+// lead straight to the relay, so the client only ever sees an opaque token and
+// the real model id stays in the server's env vars.
 const MODEL_ROWS = [
-  { id: "gpt-image-2.5", model_id: "gpt-image-2.5-relay-one", display_name: "GPT Image 2.5 · Studio", provider: "relay1", ratios: Object.keys(SIZES) },
-  { id: "relay-two-image", model_id: "relay-two-image", display_name: "Nano Banana 2 · 1K", provider: "relay2", ratios: GEMINI_RATIOS },
-  { id: "relay-two-image-2k", model_id: "relay-two-image-2k", display_name: "Nano Banana 2 · 2K", provider: "relay2", ratios: GEMINI_RATIOS },
-  { id: "relay-two-image-4k", model_id: "relay-two-image-4k", display_name: "Nano Banana 2 · 4K", provider: "relay2", ratios: GEMINI_RATIOS },
+  { id: "m1", model_id: MODEL, display_name: "GPT Image 2.5", provider: "p1", ratios: Object.keys(SIZES) },
+  { id: "m2", model_id: process.env.PROV2_MODEL_1K || "", display_name: "Nano Banana 2 · 1K", provider: "p2", ratios: GEMINI_RATIOS },
+  { id: "m3", model_id: process.env.PROV2_MODEL_2K || "", display_name: "Nano Banana 2 · 2K", provider: "p2", ratios: GEMINI_RATIOS },
+  { id: "m4", model_id: process.env.PROV2_MODEL_4K || "", display_name: "Nano Banana 2 · 4K", provider: "p2", ratios: GEMINI_RATIOS },
 ];
 
 // provider is server-side routing info only — never sent to the client, so
@@ -77,7 +86,7 @@ function cleanKey(raw) {
 // token, so a random visitor with the site password cannot spend your balance.
 // ADMIN_TOKEN unset = env key unreachable from the API at all.
 function keyCandidates(req, provider) {
-  const P = PROVIDERS[provider] || PROVIDERS.relay1;
+  const P = PROVIDERS[provider] || PROVIDERS.p1;
   const envKey = process.env[P.envVar] || "";
   const adminTok = process.env.ADMIN_TOKEN || "";
   const isAdmin = adminTok && req.headers["x-admin-token"] === adminTok;
@@ -103,6 +112,17 @@ function maskKey(k) {
 
 const json = (res, code, obj) => res.status(code).json(obj);
 
+// Upstream error text can echo the host name or the upstream model id. Scrub it
+// before it reaches the client: users only need to know the key worked or not.
+const SECRETS = [
+  ...Object.values(PROVIDERS).map((p) => p.base),
+  ...MODEL_ROWS.map((m) => m.model_id),
+].filter(Boolean);
+const scrub = (s) => String(s || "")
+  .replace(/https?:\/\/[^\s"'<>)]+/gi, "[upstream]")
+  .replace(/[a-z0-9-]+\.(?:pro|click|com|net|io|cn)\b/gi, "[upstream]")
+  .replace(new RegExp(SECRETS.map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "gi"), "[upstream]");
+
 module.exports = async function handler(req, res) {
   const url = req.url.split("?")[0];
 
@@ -126,9 +146,8 @@ module.exports = async function handler(req, res) {
     return json(res, 200, {
       models: MODELS,
       keyRequired: !isAdmin,
-      // Deliberately no upstream/base URLs: this endpoint is public and must
-      // not reveal which relay is behind the app.
-      model: MODEL,
+      // Deliberately no upstream/base URLs and no model field: this endpoint is
+      // public and must not reveal which relay is behind the app.
     });
   }
 
@@ -141,9 +160,10 @@ module.exports = async function handler(req, res) {
     if (!keys.length) return json(res, 400, { error: "no key" });
     let last = null;
     for (const { key, src, how } of keys) {
-      for (const name of ["relay1", "relay2"]) {
+      for (const name of ["p1", "p2"]) {
         const P = PROVIDERS[name];
-        const hit = { key: maskKey(key), len: key.length, source: src, how, provider: name, site: P.label, base: P.base };
+        if (!P.base) continue;
+        const hit = { key: maskKey(key), len: key.length, source: src, how, provider: name };
         try {
           const r = await fetch(P.base + "/v1/models", {
             headers: { Authorization: "Bearer " + key },
@@ -153,9 +173,9 @@ module.exports = async function handler(req, res) {
           const t = await r.text();
           let m = "";
           try { m = JSON.parse(t).error?.message || ""; } catch (e) {}
-          last = { ok: false, status: r.status, error: m || t.slice(0, 160), ...hit };
+          last = { ok: false, status: r.status, error: scrub(m || t.slice(0, 160)), ...hit };
         } catch (e) {
-          last = { ok: false, status: 0, error: "could not reach " + P.label + ": " + e.message, ...hit };
+          last = { ok: false, status: 0, error: "could not reach the upstream: " + scrub(e.message), ...hit };
         }
       }
     }
@@ -176,12 +196,15 @@ module.exports = async function handler(req, res) {
     }
 
     const P = PROVIDERS[provider];
+    if (!P.base) {
+      return json(res, 500, { error: "Server is missing the " + P.envVar.replace(/_KEY$/, "_BASE") + " setting." });
+    }
     const keys = keyCandidates(req, provider);
     if (!keys.length) {
       return json(res, 401, { error: "No API key configured for this model. Set " + P.envVar + " on the server, or paste a key in Settings." });
     }
 
-    const size = provider === "relay2"
+    const size = provider === "p2"
       ? (GEMINI_RATIOS.includes(b.ratio) ? b.ratio : "1:1")
       : SIZES[b.ratio];
 
@@ -190,7 +213,7 @@ module.exports = async function handler(req, res) {
     const mime = { png: "image/png", jpeg: "image/jpeg", jpg: "image/jpeg", webp: "image/webp" }[fmt] || "image/png";
 
     const payload = { model: row.model_id, prompt: b.prompt, n: b.n || 1 };
-    if (provider === "relay2") payload.response_format = "b64_json";
+    if (provider === "p2") payload.response_format = "b64_json";
     else payload.output_format = fmt;
     if (size) payload.size = size;
     if (refs.length) payload.image = refs;
@@ -214,28 +237,30 @@ module.exports = async function handler(req, res) {
         });
         text = await r.text();
       } catch (e) {
-        if (more) { lastErr = "invalid header: " + e.message; continue; }
-        return json(res, 502, { error: "upstream unreachable: " + e.message });
+        if (more) { lastErr = "invalid header: " + scrub(e.message); continue; }
+        return json(res, 502, { error: "upstream unreachable: " + scrub(e.message) });
       }
 
       let j = null;
       try { j = JSON.parse(text); } catch (e) {}
 
       if (!r.ok) {
-        lastErr = (j && (j.error?.message || j.message)) || text.slice(0, 300);
+        lastErr = scrub((j && (j.error?.message || j.message)) || text.slice(0, 300));
         if (r.status === 401 && more) continue;
         // Name the key that was sent. Without this an "Invalid token" is
         // indistinguishable from a typo or the env key shadowing Settings.
+        // The upstream model id is deliberately left out — it is searchable and
+        // would name the relay.
         return json(res, r.status, {
           error: lastErr + "\n\nkey sent: " + maskKey(key) + " (" + key.length + " chars, " + how + ") from " + src +
-            " · model: " + row.model_id,
+            " · model: " + row.id,
         });
       }
 
       const urls = ((j && j.data) || [])
         .map((d) => d.b64_json ? "data:" + mime + ";base64," + d.b64_json : d.url)
         .filter(Boolean);
-      if (!urls.length) return json(res, 502, { error: "upstream returned no image: " + text.slice(0, 300) });
+      if (!urls.length) return json(res, 502, { error: "upstream returned no image: " + scrub(text.slice(0, 300)) });
 
       return json(res, 200, { status: "completed", progress: 100, result_urls: urls });
     }
