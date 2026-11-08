@@ -208,6 +208,16 @@
   sfxBtn?.addEventListener('click', () => { SFX.toggle(); syncSfxBtn(); if (SFX.enabled) SFX.pop(); });
   syncSfxBtn();
 
+  /* ── prompt ideas ── */
+  // meigen.ai cannot be embedded: it is behind a Cloudflare bot challenge and
+  // sends x-frame-options: SAMEORIGIN, so an iframe renders the challenge and
+  // a server-side proxy would just fetch the same challenge page. Open it in
+  // a new tab instead and let the user copy a prompt back into the composer.
+  $('#btnIdeas')?.addEventListener('click', () => {
+    SFX.pop();
+    window.open('https://www.meigen.ai/', '_blank', 'noopener');
+  });
+
   /* ── creator Threads link (topbar + settings) ── */
   const THREADS_URL = 'https://www.threads.com/@halimmok.exe';
   $('#btnThreads')?.addEventListener('click', () => { SFX.pop(); window.open(THREADS_URL, '_blank', 'noopener'); });
