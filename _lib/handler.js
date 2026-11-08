@@ -257,9 +257,22 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      const urls = ((j && j.data) || [])
-        .map((d) => d.b64_json ? "data:" + mime + ";base64," + d.b64_json : d.url)
-        .filter(Boolean);
+      // Provider 1 may answer with a CDN URL instead of base64. That URL's
+      // hostname names the relay, so fetch it here and inline it as a data
+      // URL before it ever reaches the browser.
+      const raw = ((j && j.data) || []).map((d) => d.b64_json ? { b64: d.b64_json } : { url: d.url }).filter((d) => d.b64 || d.url);
+      const urls = [];
+      for (const d of raw) {
+        if (d.b64) { urls.push("data:" + mime + ";base64," + d.b64); continue; }
+        try {
+          const up = await fetch(d.url, { signal: AbortSignal.timeout(30000) });
+          if (!up.ok) throw new Error("status " + up.status);
+          const ct = (up.headers.get("content-type") || "image/png").split(";")[0];
+          urls.push("data:" + ct + ";base64," + Buffer.from(await up.arrayBuffer()).toString("base64"));
+        } catch (e) {
+          return json(res, 502, { error: "could not inline the generated image: " + scrub(e.message) });
+        }
+      }
       if (!urls.length) return json(res, 502, { error: "upstream returned no image: " + scrub(text.slice(0, 300)) });
 
       return json(res, 200, { status: "completed", progress: 100, result_urls: urls });
