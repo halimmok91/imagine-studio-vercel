@@ -93,6 +93,17 @@ const json = (res, code, obj) => res.status(code).json(obj);
 module.exports = async function handler(req, res) {
   const url = req.url.split("?")[0];
 
+  // Password gate. Root middleware.js cannot be used — Vercel CLI 65 treats it
+  // as a root proxy that suppresses static files and api/ discovery, 404ing the
+  // whole deployment. So the check lives here. APP_PASSWORD unset = gate off.
+  // The client sends the password in x-app-password; never exposed to the page
+  // source or to visitors who only have the URL.
+  const APP_PW = process.env.APP_PASSWORD || "";
+  if (APP_PW) {
+    const sent = req.headers["x-app-password"] || "";
+    if (sent !== APP_PW) return json(res, 401, { error: "password required", auth: true });
+  }
+
   // ---- GET /api/public/v1/models --------------------------------------
   if (url === "/api/public/v1/models" && req.method === "GET") {
     const keyed = { relay1: !!process.env.RELAY1_KEY, relay2: !!process.env.RELAY2_KEY };
