@@ -41,9 +41,9 @@ host or provider field. Upstream error text is scrubbed of host names and model
 ids before it reaches the client. Keep it that way if you share this repo — a
 hostname in the source, the README, or a client-visible id undoes the whole thing.
 
-**Git history still contains the old host names.** They were in earlier commits.
-If the repo is public, anyone can find them with `git log -S`. Make the repo
-private, or rewrite history, before sharing the URL.
+**Git history was purged.** The old host names were in earlier commits, so the
+history was rewritten and force-pushed. If you fork or re-share this repo,
+keep it that way — a hostname in any commit undoes the whole thing.
 
 ## Password gate
 
