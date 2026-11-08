@@ -540,16 +540,15 @@ function syncBatchUI() {
   if (d) d.value = state.delayMs || 0;
   const sq = $("#seqToggle");
   if (sq) sq.checked = !!state.seq;
-  // When batch is 2+, queue is auto-forced (account allows ~1 concurrent); reflect that.
   const hint = $("#batchModeHint");
-  if (hint) hint.textContent = n >= 2 ? "Queue auto-enabled (2+ images)" : (state.seq ? "Queue on" : "Parallel");
-  if (sq) sq.disabled = n >= 2;
+  if (hint) hint.textContent = state.seq ? "Queue on" : "Parallel";
 }
 
-// The account allows only ~1 concurrent generation (server: "Concurrency limit
-// exceeded"). So any batch of 2+ must run one at a time; only batch 1 can run solo.
+// Queueing is opt-in only. It used to be forced on for any batch of 2+, as a
+// way around the account's RPM cap; that auto-queue is removed so concurrent
+// generation can be tested properly. The manual toggle still works.
 function shouldQueue(n) {
-  return n >= 2 || !!state.seq;
+  return !!state.seq;
 }
 
 document.querySelectorAll("#batchChips .chip").forEach(c => {
