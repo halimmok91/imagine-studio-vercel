@@ -70,16 +70,28 @@ function cleanKey(raw) {
 
 // Every plausible form of the key, in order. Raw beats cleaned: a sanitizer
 // that eats one byte of a valid token looks exactly like a wrong key.
+//
+// The env key is NOT a default. A paying customer pastes the key they bought
+// (Settings), and that is tried first — their relay quota, their spend. The
+// baked-in env key is appended only when the request also carries the admin
+// token, so a random visitor with the site password cannot spend your balance.
+// ADMIN_TOKEN unset = env key unreachable from the API at all.
 function keyCandidates(req, provider) {
   const P = PROVIDERS[provider] || PROVIDERS.relay1;
   const envKey = process.env[P.envVar] || "";
+  const adminTok = process.env.ADMIN_TOKEN || "";
+  const isAdmin = adminTok && req.headers["x-admin-token"] === adminTok;
   const h = (req.headers["authorization"] || "").replace(/^Bearer\s+/i, "");
   const out = [];
-  for (const [raw, src] of [[envKey, P.envVar + " env"], [h, "Settings"]]) {
+  // Settings key first — the customer's own quota.
+  for (const [raw, src] of [[h, "Settings"]]) {
     if (!raw) continue;
     if (!out.some((c) => c.key === raw)) out.push({ key: raw, src, how: "as given" });
     const c = cleanKey(raw);
     if (c && !out.some((x) => x.key === c)) out.push({ key: c, src, how: "after stripping invisible chars" });
+  }
+  if (isAdmin && envKey && !out.some((c) => c.key === envKey)) {
+    out.push({ key: envKey, src: P.envVar + " env", how: "as given" });
   }
   return out;
 }
@@ -107,10 +119,13 @@ module.exports = async function handler(req, res) {
 
   // ---- GET /api/public/v1/models --------------------------------------
   if (url === "/api/public/v1/models" && req.method === "GET") {
-    const keyed = { relay1: !!process.env.RELAY1_KEY, relay2: !!process.env.RELAY2_KEY };
+    // Customers must supply their own key. The env key is admin-only, so a
+    // non-admin caller needs a key regardless of what's configured server-side.
+    const adminTok = process.env.ADMIN_TOKEN || "";
+    const isAdmin = adminTok && req.headers["x-admin-token"] === adminTok;
     return json(res, 200, {
       models: MODELS,
-      keyRequired: !keyed.relay1 && !keyed.relay2,
+      keyRequired: !isAdmin,
       // Deliberately no upstream/base URLs: this endpoint is public and must
       // not reveal which relay is behind the app.
       model: MODEL,
