@@ -22,7 +22,8 @@ function Invoke-Vercel {
   $prev = $ErrorActionPreference
   $ErrorActionPreference = 'Continue'
   try {
-    $out = & $Cmd[0] @($Cmd[1..($Cmd.Count - 1)]) 2>&1 | Out-String
+    if ($Cmd.Count -gt 1) { $out = & $Cmd[0] @($Cmd[1..($Cmd.Count - 1)]) 2>&1 | Out-String }
+    else { $out = & $Cmd[0] 2>&1 | Out-String }
     return @{ code = $LASTEXITCODE; out = $out }
   } finally { $ErrorActionPreference = $prev }
 }
