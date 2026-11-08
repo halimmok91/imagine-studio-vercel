@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/[...path].js": {
+    "api/public/v1/*.js": {
       "maxDuration": 60,
       "memory": 1024
     }
