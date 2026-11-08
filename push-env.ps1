@@ -64,11 +64,14 @@ foreach ($name in @('PROV1_BASE', 'PROV1_KEY', 'PROV1_MODEL', 'PROV2_BASE', 'PRO
   # A missing variable is not an error here, so the exit code is ignored.
   Invoke-Native vercel env rm $name production --yes | Out-Null
 
-  # vercel env add reads the value from stdin.
+  # vercel env add reads the value from stdin. Feed it the file as raw bytes:
+  # PowerShell's pipe re-encodes a string with the console code page (ASCII in
+  # Windows PowerShell 5.1), which corrupts the CJK model id. cmd redirection
+  # passes the bytes through untouched.
   $prev = $ErrorActionPreference
   $ErrorActionPreference = 'Continue'
   try {
-    Get-Content $tmp -Raw -Encoding UTF8 | vercel env add $name production 2>&1 | Out-Null
+    cmd /c "vercel env add $name production < `"$tmp`" 2>&1" | Out-Null
     $code = $LASTEXITCODE
   } finally { $ErrorActionPreference = $prev }
 
