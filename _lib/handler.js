@@ -181,10 +181,10 @@ module.exports = async function handler(req, res) {
           method: "POST",
           headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
           body: JSON.stringify(payload),
-          // Must stay under vercel.json's maxDuration (60s on Hobby), otherwise
-          // the platform kills the function and the client gets a bare 504 with
-          // no error text. 55s leaves room to return a real message.
-          signal: AbortSignal.timeout(Number(process.env.UPSTREAM_TIMEOUT_MS) || 55000),
+          // Hobby with Fluid Compute allows 300s. Keep this under vercel.json's
+          // maxDuration so Vercel never kills the request before the function
+          // can return the upstream error text.
+          signal: AbortSignal.timeout(Number(process.env.UPSTREAM_TIMEOUT_MS) || 240000),
         });
         text = await r.text();
       } catch (e) {

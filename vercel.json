@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/public/v1/*.js": {
-      "maxDuration": 60,
+      "maxDuration": 300,
       "memory": 1024
     }
   }

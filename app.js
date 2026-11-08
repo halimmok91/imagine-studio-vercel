@@ -1086,10 +1086,14 @@ async function startJob(params, idx) {
       else failJob(job, "Finished without an image.");
       break;
     } catch (e) {
-      if (e.status === 429 && attempt < MAX_RETRIES && !job.cancelled) {
+      // Retry transient provider failures automatically. A token can work on
+      // the next request when an upstream pool rotates or times out.
+      const transient = [401, 429, 502, 503, 504].includes(e.status) ||
+        (e.status === 0 && /fetch|network|abort|timeout/i.test(e.message));
+      if (transient && attempt < MAX_RETRIES && !job.cancelled) {
         job.retries = attempt + 1;
         const backoff = 2000 * (attempt + 1);  // 2s, 4s, 6s, 8s, 10s
-        updateSkeleton(job, `429 retry ${attempt + 1}/${MAX_RETRIES}`);
+        updateSkeleton(job, `Retrying ${attempt + 1}/${MAX_RETRIES}`);
         await new Promise(r => setTimeout(r, backoff));
         // Re-upload refs fresh after the wait — the old upload likely expired.
         if (hasRefs && !(await uploadRefsForAttempt())) {
