@@ -22,7 +22,8 @@ function Invoke-Native {
   $prev = $ErrorActionPreference
   $ErrorActionPreference = 'Continue'
   try {
-    & $Cmd[0] @($Cmd[1..($Cmd.Count - 1)]) 2>&1 | Out-Null
+    if ($Cmd.Count -gt 1) { & $Cmd[0] @($Cmd[1..($Cmd.Count - 1)]) 2>&1 | Out-Null }
+    else { & $Cmd[0] 2>&1 | Out-Null }
     return $LASTEXITCODE
   } finally { $ErrorActionPreference = $prev }
 }
