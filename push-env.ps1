@@ -16,15 +16,27 @@ if ($self -match '[^\x00-\x7F]') {
 # The Vercel CLI writes its banner and progress to stderr. With
 # ErrorActionPreference = Stop, PowerShell turns that into a terminating
 # NativeCommandError even when the command succeeded. Relax it around every
-# native call and rely on the exit code instead.
-function Invoke-Native {
+# native call and rely on the exit code and captured output instead.
+function Invoke-Vercel {
   param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Cmd)
   $prev = $ErrorActionPreference
   $ErrorActionPreference = 'Continue'
   try {
-    if ($Cmd.Count -gt 1) { & $Cmd[0] @($Cmd[1..($Cmd.Count - 1)]) 2>&1 | Out-Null }
-    else { & $Cmd[0] 2>&1 | Out-Null }
-    return $LASTEXITCODE
+    $out = & $Cmd[0] @($Cmd[1..($Cmd.Count - 1)]) 2>&1 | Out-String
+    return @{ code = $LASTEXITCODE; out = $out }
+  } finally { $ErrorActionPreference = $prev }
+}
+
+# Feed the value to `vercel env add` as raw bytes through cmd redirection.
+# PowerShell's own pipe re-encodes a string with the console code page (ASCII
+# in Windows PowerShell 5.1), which corrupts the non-ASCII model id.
+function Add-EnvVar {
+  param([string]$Name, [string]$TmpFile)
+  $prev = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    $out = cmd /c "vercel env add $Name production < `"$TmpFile`" 2>&1" 2>&1 | Out-String
+    return @{ code = $LASTEXITCODE; out = $out }
   } finally { $ErrorActionPreference = $prev }
 }
 
@@ -36,7 +48,7 @@ if (-not (Get-Command vercel -ErrorAction SilentlyContinue)) {
 if (-not (Test-Path .env.local)) { throw ".env.local not found" }
 
 # Read as UTF8. Windows PowerShell defaults to ANSI and would corrupt the
-# non-ASCII model id (CJK chars) - the upstream then rejects the model name.
+# non-ASCII model id - the upstream then rejects the model name.
 $vars = @{}
 foreach ($line in Get-Content .env.local -Encoding UTF8) {
   if ($line -match '^\s*#' -or $line -notmatch '=') { continue }
@@ -48,37 +60,64 @@ foreach ($line in Get-Content .env.local -Encoding UTF8) {
 # Newer CLI versions write .vercel/repo.json, older ones .vercel/project.json.
 if (-not (Test-Path .vercel\project.json) -and -not (Test-Path .vercel\repo.json)) {
   Write-Host "Linking to your Vercel project..."
-  if ((Invoke-Native vercel link --yes) -ne 0) { throw "vercel link failed" }
+  $r = Invoke-Vercel vercel link --yes
+  if ($r.code -ne 0) { throw "vercel link failed`n$($r.out)" }
 }
 
-# Each value goes through a UTF-8 file, never through the shell. Piping a
-# string into vercel env add re-encodes it with the console code page and
-# mangles anything outside ASCII.
 $tmp = Join-Path $env:TEMP "vercel-env-value.txt"
+$failed = @()
+
 foreach ($name in @('PROV1_BASE', 'PROV1_KEY', 'PROV1_MODEL', 'PROV2_BASE', 'PROV2_KEY', 'PROV2_MODEL_1K', 'PROV2_MODEL_2K', 'PROV2_MODEL_4K', 'APP_PASSWORD', 'ADMIN_TOKEN')) {
   $val = $vars[$name]
   if (-not $val) { Write-Host "Skipping $name (blank in .env.local)"; continue }
   [System.IO.File]::WriteAllText($tmp, $val, (New-Object System.Text.UTF8Encoding $false))
 
-  # Remove then re-add: `vercel env add` refuses to overwrite an existing value.
-  # A missing variable is not an error here, so the exit code is ignored.
-  Invoke-Native vercel env rm $name production --yes | Out-Null
+  # `vercel env add` refuses to overwrite an existing value, so remove first.
+  # The remove is allowed to fail - it fails when the variable does not exist
+  # yet, and the add below then succeeds anyway.
+  $rm = Invoke-Vercel vercel env rm $name production --yes
+  Start-Sleep -Milliseconds 1500
 
-  # vercel env add reads the value from stdin. Feed it the file as raw bytes:
-  # PowerShell's pipe re-encodes a string with the console code page (ASCII in
-  # Windows PowerShell 5.1), which corrupts the CJK model id. cmd redirection
-  # passes the bytes through untouched.
-  $prev = $ErrorActionPreference
-  $ErrorActionPreference = 'Continue'
-  try {
-    cmd /c "vercel env add $name production < `"$tmp`" 2>&1" | Out-Null
-    $code = $LASTEXITCODE
-  } finally { $ErrorActionPreference = $prev }
+  $r = Add-EnvVar $name $tmp
 
-  if ($code -eq 0) { Write-Host "OK $name" } else { throw "Failed: $name (vercel env add exited $code)" }
+  # The remove above can fail for reasons the CLI does not explain (the
+  # variable is protected, or the remove raced the add). If the add says the
+  # value already exists, remove again and retry once.
+  if ($r.code -ne 0 -and $r.out -match 'already exists') {
+    Write-Host "  $name already exists, removing and retrying..."
+    $rm = Invoke-Vercel vercel env rm $name production --yes
+    Start-Sleep -Milliseconds 1500
+    $r = Add-EnvVar $name $tmp
+  }
+
+  if ($r.code -eq 0) {
+    Write-Host "OK $name"
+  } else {
+    # Last check: the add may have succeeded but the CLI exited non-zero.
+    # `vercel env ls` is the source of truth.
+    $ls = Invoke-Vercel vercel env ls production
+    if ($ls.out -match [regex]::Escape($name)) {
+      Write-Host "OK $name (already present)"
+    } else {
+      Write-Host "FAILED $name"
+      Write-Host "  add said: $($r.out.Trim())"
+      Write-Host "  rm said:  $($rm.out.Trim())"
+      $failed += $name
+    }
+  }
 }
 Remove-Item $tmp -ErrorAction SilentlyContinue
 
-Write-Host "`nDone. Redeploying production..."
-if ((Invoke-Native vercel --prod --yes) -ne 0) { throw "vercel deploy failed" }
+if ($failed.Count -gt 0) {
+  Write-Host ""
+  Write-Host "These variables were not set: $($failed -join ', ')"
+  Write-Host "Set them by hand in the Vercel dashboard, then redeploy."
+  Write-Host "Nothing was redeployed."
+  exit 1
+}
+
+Write-Host ""
+Write-Host "Done. Redeploying production..."
+$r = Invoke-Vercel vercel --prod --yes
+if ($r.code -ne 0) { throw "vercel deploy failed`n$($r.out)" }
 Write-Host "Redeployed."
