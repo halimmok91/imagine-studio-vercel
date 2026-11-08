@@ -388,7 +388,12 @@ function toast(msg, type = "info") {
 }
 
 function apiErrorToast(e) {
-  if (e.status === 401) { toast("Invalid or missing API key.", "error"); openSettings(); }
+  if (e.status === 401) {
+    // Don't pop Settings: with server-side keys a 401 is upstream, and this
+    // dialog misleads the user into re-entering a key that already works.
+    toast(state.keyRequired ? "Invalid or missing API key." : "Upstream rejected the key — retrying may work.", "error");
+    if (state.keyRequired) openSettings();
+  }
   else if (e.status === 402) toast("Insufficient credits or no active subscription.", "error");
   else if (e.status === 403) toast("This model requires a higher plan tier.", "error");
   else if (e.status === 429) toast("Rate limit reached — slow down a little.", "error");
