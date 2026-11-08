@@ -278,7 +278,9 @@ module.exports = async function handler(req, res) {
 
     // Build the multipart body the OpenAI edits endpoint expects. The refs are
     // data URLs, so decode each into a real file part.
-    function multipartBody(key) {
+    // OpenAI uses image[] for multiple files; a few relays only read `image`.
+    // Both are tried before falling back to JSON.
+    function multipartBody(key, fieldName) {
       const form = new FormData();
       form.append("model", payload.model);
       form.append("prompt", payload.prompt);
@@ -289,7 +291,7 @@ module.exports = async function handler(req, res) {
       refs.forEach((ref) => {
         const m = /^data:([^;]+);base64,(.*)$/s.exec(ref);
         const bytes = Buffer.from(m ? m[2] : ref, "base64");
-        form.append("image[]", new Blob([bytes], { type: m ? m[1] : "image/png" }), "reference.png");
+        form.append(fieldName, new Blob([bytes], { type: m ? m[1] : "image/png" }), "reference.png");
       });
       return { headers: { Authorization: "Bearer " + key }, body: form };
     }
@@ -298,14 +300,17 @@ module.exports = async function handler(req, res) {
     for (let ki = 0; ki < keys.length; ki++) {
       const { key, src, how } = keys[ki];
       const more = ki < keys.length - 1;
-      // multipart first, then JSON. One fallback attempt per key.
-      const attempts = refs.length ? ["multipart", "json"] : ["json"];
+      // multipart with image[], then image, then JSON. One fallback chain per
+      // key: a relay may reject the field name or the whole encoding.
+      const attempts = refs.length ? ["multipart[]", "multipart", "json"] : ["json"];
       let r = null, text = "", j = null;
       for (const shape of attempts) {
         try {
+          const opts = shape === "json" ? jsonBody(key)
+            : multipartBody(key, shape === "multipart[]" ? "image[]" : "image");
           r = await fetch(target, {
             method: "POST",
-            ...(shape === "multipart" ? multipartBody(key) : jsonBody(key)),
+            ...opts,
             // Hobby with Fluid Compute allows 300s. Keep this under vercel.json's
             // maxDuration so Vercel never kills the request before the function
             // can return the upstream error text.
