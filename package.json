@@ -1,0 +1,9 @@
+{
+  "name": "imagine-studio-vercel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Imagine Studio — Studio + Gemini, serverless build",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

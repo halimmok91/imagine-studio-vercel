@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Imagine · Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23d3b178' d='M12 2c.6 4.8 2.2 6.4 7 7-4.8.6-6.4 2.2-7 7-.6-4.8-2.2-6.4-7-7 4.8-.6 6.4-2.2 7-7Z'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<!-- ═══ REVAMP LAYER: ambient canvas + boot + scrim (additive; no app.js hooks) ═══ -->
+<canvas id="gl" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<div class="boot" id="boot" aria-hidden="true">
+  <div class="boot-inner">
+    <svg class="boot-mark" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.6 4.8 2.2 6.4 7 7-4.8.6-6.4 2.2-7 7-.6-4.8-2.2-6.4-7-7 4.8-.6 6.4-2.2 7-7Z"/></svg>
+    <div class="boot-word"><span>I</span><span>m</span><span>a</span><span>g</span><span>i</span><span>n</span><span>e</span></div>
+    <div class="boot-bar"><i></i></div>
+  </div>
+</div>
+<div class="scrim" id="scrim" hidden></div>
+
+<header class="topbar">
+  <div class="brand" data-reveal>
+    <div class="brand-orb">
+      <svg class="brand-mark" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.6 4.8 2.2 6.4 7 7-4.8.6-6.4 2.2-7 7-.6-4.8-2.2-6.4-7-7 4.8-.6 6.4-2.2 7-7Z"/></svg>
+    </div>
+    <span class="brand-name">Imagine</span>
+    <span class="brand-sub">Studio</span>
+  </div>
+  <div class="topbar-actions" data-reveal>
+    <div class="conn" id="connStatus"><span class="conn-dot"></span><span class="conn-label">Idle</span></div>
+    <button class="icon-btn" id="btnClearAll" title="Clear gallery" aria-label="Clear gallery">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m3 0v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7h12Z"/></svg>
+    </button>
+    <button class="icon-btn" id="btnSfx" title="Toggle interface sounds" aria-label="Toggle interface sounds">
+      <svg class="sfx-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.4 5.6a9 9 0 0 1 0 12.8"/></svg>
+      <svg class="sfx-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="m22 9-6 6M16 9l6 6"/></svg>
+    </button>
+    <button class="icon-btn" id="btnThreads" title="Follow @halimmok.exe on Threads" aria-label="Threads account">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/></svg>
+    </button>
+    <button class="icon-btn" id="btnSettings" title="Settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="15" cy="7" r="2.2" fill="var(--bg)"/><circle cx="8" cy="12" r="2.2" fill="var(--bg)"/><circle cx="12" cy="17" r="2.2" fill="var(--bg)"/></svg>
+    </button>
+    <button class="icon-btn fab-composer" id="fabComposer" title="Open composer" aria-label="Open composer">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 20l1.2-4.2L16.5 4.5a2.05 2.05 0 0 1 3 3L8.2 18.8 4 20Z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="composer" id="composer">
+
+    <div class="composer-head">
+      <span class="composer-title">Composer</span>
+      <button class="icon-btn" id="composerClose" aria-label="Close composer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+
+    <section class="panel" id="promptPanel" data-reveal>
+      <div class="panel-head">
+        <span class="label"><i class="idx">01</i>Prompt</span>
+        <div class="prompt-mode" id="promptMode">
+          <button type="button" class="mode-pill active" data-mode="free">Free</button>
+          <button type="button" class="mode-pill" data-mode="guide">Guided</button>
+        </div>
+        <span class="label-hint" id="charCount">0 / 10000</span>
+      </div>
+      <div class="prompt-row">
+        <div class="prompt-shell" id="promptShell">
+          <div class="prompt-glow" aria-hidden="true"></div>
+          <textarea id="promptInput" maxlength="10000" rows="6" placeholder="Describe what you want to see…" spellcheck="false"></textarea>
+        </div>
+        <button type="button" id="promptHistoryBtn" class="prompt-history-btn" title="Recent prompts" aria-label="Recent prompts">▾</button>
+        <div class="prompt-history" id="promptHistory" hidden></div>
+      </div>
+      <div class="prompt-tip"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> to generate</div>
+      <div class="guide" id="promptGuide" hidden>
+        <div class="guide-step" data-step="1">
+          <div class="guide-label">Output type</div>
+          <div class="chip-row" data-ggroup="type">
+            <button type="button" class="chip" data-gval="photo">Photo / realistic</button>
+            <button type="button" class="chip" data-gval="illustration">Illustration / artistic</button>
+            <button type="button" class="chip" data-gval="product">Product / commercial</button>
+            <button type="button" class="chip" data-gval="infographic">Infographic / educational</button>
+            <button type="button" class="chip" data-gval="ui">UI mockup / design</button>
+            <button type="button" class="chip" data-gval="editorial">Magazine / poster</button>
+          </div>
+          <div class="guide-label" style="margin-top:9px">Subject</div>
+          <div class="chip-row" data-ggroup="subject">
+            <button type="button" class="chip" data-gval="person">Person</button>
+            <button type="button" class="chip" data-gval="product">Object / product</button>
+            <button type="button" class="chip" data-gval="scene">Scene / environment</button>
+            <button type="button" class="chip" data-gval="concept">Concept / abstract</button>
+          </div>
+          <div class="guide-extra">
+            <input type="text" id="guideSubject" placeholder="Describe your subject (e.g. 'young woman in red dress', 'ceramic vase')" maxlength="120">
+          </div>
+        </div>
+        <div class="guide-step" data-step="2" hidden>
+          <div class="guide-label" data-dynamic-label>Details</div>
+          <div class="chip-row" data-ggroup="dynamic" id="guideDynamic"></div>
+          <div class="guide-row">
+            <div class="guide-half">
+              <div class="guide-label">Camera era</div>
+              <div class="chip-row" data-ggroup="era">
+                <button type="button" class="chip" data-gval="modern">Modern DSLR</button>
+                <button type="button" class="chip" data-gval="2000s">2000s digital</button>
+                <button type="button" class="chip" data-gval="1990s">1990s film</button>
+                <button type="button" class="chip" data-gval="vintage">Vintage film</button>
+              </div>
+            </div>
+            <div class="guide-half">
+              <div class="guide-label">Aspect ratio</div>
+              <div class="chip-row" data-ggroup="aspect">
+                <button type="button" class="chip" data-gval="1:1">1:1</button>
+                <button type="button" class="chip" data-gval="16:9">16:9</button>
+                <button type="button" class="chip" data-gval="9:16">9:16</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="guide-step" data-step="3" hidden>
+          <div class="guide-label">Assembled prompt</div>
+          <p class="guide-preview" id="guidePreview">Pick a type and subject to begin.</p>
+          <div class="guide-actions">
+            <button type="button" class="text-btn" id="guideUse">Use this prompt</button>
+            <button type="button" class="text-btn" id="guideBack">Back</button>
+            <button type="button" class="text-btn" id="guideReset">Reset</button>
+          </div>
+        </div>
+        <div class="guide-nav">
+          <span class="guide-step-ind" data-step-ind="1">1</span>
+          <span class="guide-step-ind" data-step-ind="2">2</span>
+          <span class="guide-step-ind" data-step-ind="3">3</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="refsPanel" data-reveal>
+      <div class="panel-head"><span class="label"><i class="idx">02</i>References</span><span class="label-hint" id="refCountLabel">0 / 6</span></div>
+      <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Add reference images">
+        <div class="dz-rings" aria-hidden="true"><i></i><i></i><i></i></div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        <span>Drop images, paste,<br>or click to browse</span>
+      </div>
+      <input type="file" id="refInput" accept="image/png,image/jpeg,image/webp" multiple hidden>
+      <div class="ref-thumbs" id="refThumbs"></div>
+    </section>
+
+    <section class="panel" data-reveal>
+      <div class="panel-head"><span class="label"><i class="idx">03</i>Model</span><span class="label-hint" id="modelHint"></span></div>
+      <div class="select-wrap">
+        <select id="modelSelect" aria-label="Model"></select>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
+    </section>
+
+    <section class="panel" data-reveal>
+      <div class="panel-head"><span class="label"><i class="idx">03b</i>Batch size</span><span class="label-hint" id="batchModeHint">Parallel</span></div>
+      <div class="chip-row" id="batchChips">
+        <button type="button" class="chip active" data-batch="1">1</button>
+        <button type="button" class="chip" data-batch="2">2</button>
+        <button type="button" class="chip" data-batch="3">3</button>
+        <button type="button" class="chip" data-batch="4">4</button>
+      </div>
+      <div class="delay-row">
+        <label for="delayInput">Stagger between jobs</label>
+        <input type="number" id="delayInput" min="0" max="60000" step="500" value="0">
+        <span class="delay-unit">ms</span>
+      </div>
+      <div class="seq-row">
+        <label class="switch">
+          <input type="checkbox" id="seqToggle">
+          <span class="switch-track"></span>
+          <span class="switch-label">Queue one at a time</span>
+        </label>
+      </div>
+      <div class="prompt-tip">Queue mode waits for each job to finish before starting the next — reliably avoids the ~2-concurrent cap.</div>
+    </section>
+
+    <section class="panel" data-reveal>
+      <div class="panel-head"><span class="label"><i class="idx">04</i>Aspect ratio</span></div>
+      <div class="chip-row" id="ratioChips"></div>
+    </section>
+
+    <section class="panel" id="qualityPanel" hidden>
+      <div class="panel-head"><span class="label">Quality</span></div>
+      <div class="chip-row" id="qualityChips"></div>
+    </section>
+
+    <section class="panel" id="modePanel" hidden>
+      <div class="panel-head"><span class="label">Mode</span></div>
+      <div class="chip-row" id="modeChips"></div>
+    </section>
+
+    <section class="panel" id="stylePanel" hidden>
+      <div class="panel-head"><span class="label">Style</span></div>
+      <div class="chip-row wrap scroll" id="styleChips"></div>
+    </section>
+
+    <button class="generate-btn" id="btnGenerate" data-reveal>
+      <span class="gen-aura" aria-hidden="true"></span>
+      <svg class="ic-spark" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.6 4.8 2.2 6.4 7 7-4.8.6-6.4 2.2-7 7-.6-4.8-2.2-6.4-7-7 4.8-.6 6.4-2.2 7-7Z"/></svg>
+      <svg class="ic-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9"/></svg>
+      <span id="genLabel">Generate</span>
+    </button>
+  </aside>
+
+  <div class="resizer" id="resizer" title="Drag to resize" aria-hidden="true"></div>
+
+  <section class="stage">
+    <div class="stage-head" data-reveal>
+      <h1 class="stage-title">Gallery<span class="count-pill" id="galleryCount"></span></h1>
+      <div class="stage-search">
+        <input type="search" id="gallerySearch" placeholder="Search prompts…" aria-label="Search gallery">
+      </div>
+      <div class="stage-sort">
+        <label class="sort-label" for="sortSelect">Sort</label>
+        <div class="select-wrap sort-wrap">
+          <select id="sortSelect" aria-label="Sort gallery">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+          </select>
+        </div>
+        <button type="button" class="ghost-btn" id="btnExportAll" title="Save every locally-cached image to your chosen folder">Export all</button>
+      </div>
+    </div>
+
+    <div class="empty-state" id="emptyState">
+      <div class="ornament">
+        <span class="ring r1"></span>
+        <span class="ring r2"></span>
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.6 4.8 2.2 6.4 7 7-4.8.6-6.4 2.2-7 7-.6-4.8-2.2-6.4-7-7 4.8-.6 6.4-2.2 7-7Z"/></svg>
+      </div>
+      <h2>Nothing imagined yet.</h2>
+      <p>Craft a prompt on the left and press Generate.<br>Your creations will gather here.</p>
+    </div>
+
+    <div class="gallery" id="gallery"></div>
+    <div class="reqlog" id="reqLog" hidden>
+      <div class="reqlog-head">
+        <span class="label">Request log</span>
+        <span class="reqlog-count" id="reqLogCount">0</span>
+        <button class="text-btn reqlog-clear" id="btnClearLog">Clear</button>
+      </div>
+      <div class="reqlog-body" id="reqLogBody"></div>
+    </div>
+  </section>
+</main>
+
+<div class="overlay" id="settingsOverlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="modal-head">
+      <h3 id="settingsTitle">Settings</h3>
+      <button class="icon-btn" id="btnCloseSettings" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <label class="field">
+      <span class="label">Keys — one per line (round-robin)</span>
+      <textarea id="apiKeysInput" rows="4" placeholder="sk-…&#10;sk-…" autocomplete="off" spellcheck="false"></textarea>
+      <span class="field-note">Keys for both sites go here — the adapter works out which site each one belongs to. Optional if a key is set in <code>key.txt</code> / <code>key-relay2.txt</code> next to the app, or in <code>RELAY1_KEY</code> / <code>RELAY2_KEY</code>; a file or env key wins, and this box is tried only if that one is rejected. Add several to spread requests across keys.</span>
+    </label>
+    <label class="field">
+      <span class="label">Upstream base URL</span>
+      <input type="text" id="baseUrlInput" placeholder="https://relay-one.invalid  +  https://relay-two.invalid" spellcheck="false" readonly>
+      <span class="field-note">Fixed. Each model calls its own site's <code>/v1/images/generations</code> or <code>/v1/images/edits</code>. Change them with <code>RELAY1_BASE</code> / <code>RELAY2_BASE</code>, not here — a value typed in this box would bypass the server and expose your key to the browser.</span>
+    </label>
+    <hr class="field-sep">
+    <div class="field">
+      <span class="label">Auto-download generated images</span>
+      <label class="switch">
+        <input type="checkbox" id="autoSaveToggle">
+        <span class="switch-track"></span>
+        <span class="switch-label">Download each new image as a .png</span>
+      </label>
+      <span class="field-note">Goes to your browser's Downloads folder. This build runs on Vercel, so there is no save-folder picker — the gallery itself is kept in the browser and survives reloads.</span>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost-btn" id="btnTestConn">Test connection</button>
+      <button class="ghost-btn" id="btnTestKeys">Test all keys</button>
+      <button class="primary-btn" id="btnSaveSettings">Save</button>
+    </div>
+    <div class="about-row">
+      <span>Made by</span>
+      <a href="https://www.threads.com/@halimmok.exe" target="_blank" rel="noopener" title="Visit @halimmok.exe on Threads">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/></svg>
+        @halimmok.exe
+      </a>
+      <span class="about-hint">on Threads</span>
+    </div>
+    <div class="key-test-results" id="keyTestResults" hidden></div>
+  </div>
+</div>
+
+<div class="lightbox" id="lightbox" hidden>
+  <button class="icon-btn lb-close" aria-label="Close">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+  </button>
+  <div class="lb-counter" id="lightboxCounter"></div>
+  <button class="lb-nav lb-prev" aria-label="Previous">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m14 6-6 6 6 6"/></svg>
+  </button>
+  <figure>
+    <div class="lb-frame"><img id="lightboxImg" alt=""></div>
+    <figcaption id="lightboxCap"></figcaption>
+  </figure>
+  <button class="lb-nav lb-next" aria-label="Next">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m10 6 6 6-6 6"/></svg>
+  </button>
+</div>
+
+<div class="toasts" id="toasts"></div>
+<script src="vendor/three-0.160.0.min.js"></script>
+<script src="three-bg.js"></script>
+<script src="app.js"></script>
+<script src="revamp.js"></script>
+</body>
+</html>
