@@ -32,15 +32,15 @@ const GEMINI_RATIOS = [
 ];
 
 const MODEL_ROWS = [
-  { id: "gpt-image-2.5", model_id: "gpt-image-2.5-relay-one", display_name: "GPT Image 2.5 · Studio", provider: "relay1", price: "¥0.014", ratios: Object.keys(SIZES) },
-  { id: "relay-two-image", model_id: "relay-two-image", display_name: "Relay Image · 1K", provider: "relay2", price: "$0.05", ratios: GEMINI_RATIOS },
-  { id: "relay-two-image-2k", model_id: "relay-two-image-2k", display_name: "Relay Image · 2K", provider: "relay2", price: "$0.06", ratios: GEMINI_RATIOS },
-  { id: "relay-two-image-4k", model_id: "relay-two-image-4k", display_name: "Relay Image · 4K", provider: "relay2", price: "$0.07", ratios: GEMINI_RATIOS },
+  { id: "gpt-image-2.5", model_id: "gpt-image-2.5-relay-one", display_name: "GPT Image 2.5 · Studio", provider: "relay1", ratios: Object.keys(SIZES) },
+  { id: "relay-two-image", model_id: "relay-two-image", display_name: "Nano Banana 2 · 1K", provider: "relay2", ratios: GEMINI_RATIOS },
+  { id: "relay-two-image-2k", model_id: "relay-two-image-2k", display_name: "Nano Banana 2 · 2K", provider: "relay2", ratios: GEMINI_RATIOS },
+  { id: "relay-two-image-4k", model_id: "relay-two-image-4k", display_name: "Nano Banana 2 · 4K", provider: "relay2", ratios: GEMINI_RATIOS },
 ];
 
 const MODELS = MODEL_ROWS.map((m) => ({
   id: m.id,
-  display_name: `${m.display_name}  ${m.price}`,
+  display_name: m.display_name,
   provider: m.provider,
   enabled: true,
   supports_reference_images: true,
