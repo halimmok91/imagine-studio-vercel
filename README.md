@@ -27,7 +27,7 @@ files, import the repo, set env vars.
    | `PROV2_BASE` / `PROV2_KEY` | provider 2 |
    | `PROV2_MODEL_1K` / `_2K` / `_4K` | provider 2 model ids |
 
-   The model ids contain non-ASCII characters (按次), so use `push-env.ps1`
+   Some of the model ids contain non-ASCII characters, so use `push-env.ps1`
    rather than pasting them into the dashboard by hand — it reads and writes
    UTF-8 and keeps them intact.
 
