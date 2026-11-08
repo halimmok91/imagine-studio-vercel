@@ -110,7 +110,7 @@ function keyCandidates(req, provider) {
     if (c && !out.some((x) => x.key === c)) out.push({ key: c, src, how: "after stripping invisible chars" });
   }
   if (isAdmin && envKey && !out.some((c) => c.key === envKey)) {
-    out.push({ key: envKey, src: P.envVar + " env", how: "as given" });
+    out.push({ key: envKey, src: "env", how: "as given" });
   }
   return out;
 }
@@ -119,6 +119,11 @@ function maskKey(k) {
   if (!k) return "(none)";
   return k.length <= 12 ? k.slice(0, 3) + "…" : k.slice(0, 6) + "…" + k.slice(-4);
 }
+
+// Never name an env var or say which slot a key came from. "PROV1_KEY" or
+// "PROV2_KEY" in an error is enough for a visitor to work out that the app
+// has two upstreams and which one backs which model.
+const SRC_LABEL = { Settings: "your key", env: "your key" };
 
 const json = (res, code, obj) => res.status(code).json(obj);
 
@@ -131,7 +136,22 @@ const SECRETS = [
 const scrub = (s) => String(s || "")
   .replace(/https?:\/\/[^\s"'<>)]+/gi, "[upstream]")
   .replace(/[a-z0-9-]+\.(?:pro|click|com|net|io|cn)\b/gi, "[upstream]")
-  .replace(new RegExp(SECRETS.map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "gi"), "[upstream]");
+  .replace(new RegExp(SECRETS.map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "gi"), "[upstream]")
+  // Partial model names. A relay may echo only the stem of the id.
+  .replace(/gpt[-_ ]?image[\w.-]*/gi, "[model]")
+  .replace(/gemini[\w.-]*/gi, "[model]")
+  .replace(/nano[\s_-]?banana[\w.-]*/gi, "[model]")
+  .replace(/flash[-_ ]?image[\w.-]*/gi, "[model]")
+  // The suffix that marks a per-call pricing tier is part of the upstream id.
+  .replace(/[按次]/g, "")
+  // Different upstreams answer in different languages. A Chinese error means a
+  // Chinese relay and an English one means a different relay, so the language
+  // alone tells a visitor which provider backs a model. Normalise to English.
+  .replace(/无效的令牌/g, "Invalid token")
+  .replace(/未授权|权限不足/g, "Not authorized")
+  .replace(/模型不存在|不存在该模型/g, "Model not available")
+  .replace(/余额不足/g, "Insufficient balance")
+  .replace(/频率限制|过于频繁|请求频繁/g, "Rate limited");
 
 module.exports = async function handler(req, res) {
   const url = req.url.split("?")[0];
@@ -173,7 +193,7 @@ module.exports = async function handler(req, res) {
       for (const name of ["p1", "p2"]) {
         const P = PROVIDERS[name];
         if (!P.base) continue;
-        const hit = { key: maskKey(key), len: key.length, source: src, how };
+        const hit = { key: maskKey(key), len: key.length, source: SRC_LABEL[src] || "your key", how };
         try {
           const r = await fetch(P.base + "/v1/models", {
             headers: { Authorization: "Bearer " + key },
@@ -209,11 +229,11 @@ module.exports = async function handler(req, res) {
 
     const P = PROVIDERS[provider];
     if (!P.base) {
-      return json(res, 500, { error: "Server is missing the " + P.envVar.replace(/_KEY$/, "_BASE") + " setting." });
+      return json(res, 500, { error: "This model is not available right now." });
     }
     const keys = keyCandidates(req, provider);
     if (!keys.length) {
-      return json(res, 401, { error: "No API key configured for this model. Set " + P.envVar + " on the server, or paste a key in Settings." });
+      return json(res, 401, { error: "No API key configured for this model. Paste a key in Settings." });
     }
 
     const size = provider === "p2"
@@ -264,8 +284,8 @@ module.exports = async function handler(req, res) {
         // The upstream model id is deliberately left out — it is searchable and
         // would name the relay.
         return json(res, r.status, {
-          error: lastErr + "\n\nkey sent: " + maskKey(key) + " (" + key.length + " chars, " + how + ") from " + src +
-            " · model: " + row.id,
+          error: lastErr + "\n\nkey sent: " + maskKey(key) + " (" + key.length + " chars, " + how + ") from " +
+            (SRC_LABEL[src] || "your key") + " · model: " + row.id,
         });
       }
 
