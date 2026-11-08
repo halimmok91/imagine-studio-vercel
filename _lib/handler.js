@@ -41,7 +41,7 @@ const GEMINI_RATIOS = [
 // lead straight to the relay, so the client only ever sees an opaque token and
 // the real model id stays in the server's env vars.
 const MODEL_ROWS = [
-  { id: "m1", model_id: MODEL, display_name: "GPT Image 2.5", provider: "p1", ratios: Object.keys(SIZES) },
+  { id: "m1", model_id: MODEL, display_name: "GPT Image 2.5 · Sunburst", provider: "p1", ratios: Object.keys(SIZES) },
   { id: "m2", model_id: process.env.PROV2_MODEL_1K || "", display_name: "Nano Banana 2 · 1K", provider: "p2", ratios: GEMINI_RATIOS },
   { id: "m3", model_id: process.env.PROV2_MODEL_2K || "", display_name: "Nano Banana 2 · 2K", provider: "p2", ratios: GEMINI_RATIOS },
   { id: "m4", model_id: process.env.PROV2_MODEL_4K || "", display_name: "Nano Banana 2 · 4K", provider: "p2", ratios: GEMINI_RATIOS },
@@ -163,12 +163,14 @@ module.exports = async function handler(req, res) {
       for (const name of ["p1", "p2"]) {
         const P = PROVIDERS[name];
         if (!P.base) continue;
-        const hit = { key: maskKey(key), len: key.length, source: src, how, provider: name };
+        const hit = { key: maskKey(key), len: key.length, source: src, how };
         try {
           const r = await fetch(P.base + "/v1/models", {
             headers: { Authorization: "Bearer " + key },
             signal: AbortSignal.timeout(12000),
           });
+          // No provider/site field: which relay accepted the key is exactly the
+          // thing that must not be visible.
           if (r.ok) return json(res, 200, { ok: true, ...hit });
           const t = await r.text();
           let m = "";
