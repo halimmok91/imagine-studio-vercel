@@ -26,14 +26,22 @@ if (-not (Test-Path .vercel\project.json)) {
 # The env var names changed (AIAPI_*/GOODAPI_* -> PROV1_*/PROV2_*). If the new
 # key names are blank but the old ones are still on Vercel, copy them over
 # instead of making you retype a key you already have.
+# `vercel env ls <environment>` lists what is set; it takes no name filter.
+function Get-EnvNames($envName) {
+  $out = vercel env ls $envName --yes 2>$null | Out-String
+  return ($out -split "`n" | ForEach-Object { ($_ -split '\s+')[0] } | Where-Object { $_ -match '^[A-Z][A-Z0-9_]*$' })
+}
+
+$existing = Get-EnvNames 'production'
+Write-Host "Already on Vercel (production): $($existing -join ', ')"
+
 $old = @{ PROV1_KEY = 'AIAPI_KEY'; PROV2_KEY = 'GOODAPI_KEY' }
 foreach ($new in $old.Keys) {
   if ($vars[$new]) { continue }
   $oldName = $old[$new]
-  $existing = vercel env ls $oldName production --yes 2>$null | Out-String
-  if ($existing -match [regex]::Escape($oldName)) {
-    Write-Host "$new is blank but $oldName exists on Vercel."
-    Write-Host "Copying it over: `vercel env rm $new production` then `vercel env add $new production $oldName`"
+  if ($existing -contains $oldName) {
+    # `vercel env add <new> <target> <existing>` copies the value server-side.
+    Write-Host "$new is blank but $oldName exists on Vercel — copying it over."
     vercel env rm $new production --yes 2>$null | Out-Null
     vercel env add $new production $oldName --yes
     if ($LASTEXITCODE -ne 0) { throw "Failed to copy $oldName -> $new" }
@@ -46,8 +54,7 @@ foreach ($new in $old.Keys) {
 foreach ($name in @('PROV1_BASE', 'PROV1_KEY', 'PROV1_MODEL', 'PROV2_BASE', 'PROV2_KEY', 'PROV2_MODEL_1K', 'PROV2_MODEL_2K', 'PROV2_MODEL_4K', 'APP_PASSWORD', 'ADMIN_TOKEN')) {
   $val = $vars[$name]
   if (-not $val) {
-    $already = vercel env ls $name production --yes 2>$null | Out-String
-    if ($already -match [regex]::Escape($name)) { Write-Host "Keeping existing $name"; continue }
+    if ((Get-EnvNames 'production') -contains $name) { Write-Host "Keeping existing $name"; continue }
     Write-Host "Skipping $name (empty in .env.local and not set on Vercel)"
     continue
   }
