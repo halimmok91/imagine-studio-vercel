@@ -17,8 +17,8 @@ files, import the repo, set env vars.
    |---|---|---|
    | `APP_PASSWORD` | site password | to lock the site |
 
-   Everything else — the relay base URLs and upstream model ids — also comes
-   from env vars. The full set is in `.env.local`:
+   Everything else is configured in Vercel only. Add the provider base URLs,
+   keys and upstream model ids as environment variables:
 
    | Name | Value |
    |---|---|
@@ -26,20 +26,18 @@ files, import the repo, set env vars.
    | `GOODAPI_BASE` / `GOODAPI_KEY` | provider 2 |
    | `GOODAPI_MODEL_1K` / `_2K` / `_4K` | provider 2 model ids |
 
-   Some of the model ids contain non-ASCII characters, so use `push-env.ps1`
-   rather than pasting them into the dashboard by hand — it reads and writes
-   UTF-8 and keeps them intact.
+   Paste the non-ASCII model id carefully into Vercel's environment-variable
+   value field. No local env file or env-sync script is needed.
 
-   Customers can also paste their own key in the app's Settings panel — that
-   path stores it in the browser only. Settings keys are tried before the
-   server's configured provider key.
+   Every generation requires the caller's own key in Settings. Server keys are
+   never used as a fallback for visitors.
 5. Redeploy. Open the URL.
 
 ## Upstream metadata
 
-The app shows the real provider names, model ids and upstream base URLs in
-Settings. Upstream errors are returned unchanged to aid troubleshooting, and
-generated CDN image URLs are passed directly to the browser.
+The API exposes real provider and model metadata for routing and diagnostics.
+Upstream errors are returned unchanged, and generated CDN image URLs are passed
+directly to the browser.
 
 ## The handler is not a static file
 
