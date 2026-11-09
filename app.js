@@ -1123,10 +1123,9 @@ async function startJob(params, idx) {
       else failJob(job, "Finished without an image.");
       break;
     } catch (e) {
-      // A permanently invalid key should fail immediately. If this exact key
-      // already produced an image in this session, an intermittent upstream
-      // "Invalid token" response is worth retrying with that same key.
-      const intermittentToken = e.status === 401 && state.workingKeys.has(job.key);
+      // GoodAPI intermittently returns 401 for a token it accepted moments ago.
+      // Retry this exact upstream message; other auth failures stay immediate.
+      const intermittentToken = e.status === 401 && /无效的令牌|Invalid token/i.test(e.message) && attempt < 3;
       const transient = intermittentToken || [429, 502, 503, 504].includes(e.status) ||
         (e.status === 0 && /fetch|network|abort|timeout/i.test(e.message));
       if (transient && attempt < MAX_RETRIES && !job.cancelled) {
