@@ -226,14 +226,14 @@ const LUCID_STYLES = ["dynamic", "creative", "fashion", "portrait", "cinematic",
 const SHORT_STYLES = ["dynamic", "creative", "fashion", "cinematic", "portrait", "stock-photo", "vibrant"];
 
 const FALLBACK_MODELS = [
-  { id: "gpt-image-2.5-sunburst-按次", display_name: "GPT Image 2.5 · Sunburst", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1", "16:9", "9:16"], styles: [] },
+  { id: "gpt-image-2.5-sunburst", display_name: "GPT Image 2.5 · Sunburst", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1", "16:9", "9:16"], styles: [] },
   { id: "gemini-nano-banana-2.1", display_name: "Nano Banana 2.1 · 1K", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9","1:4","4:1","1:8","8:1"], styles: [] },
   { id: "gemini-nano-banana-2.1-2k", display_name: "Nano Banana 2.1 · 2K", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9","1:4","4:1","1:8","8:1"], styles: [] },
   { id: "gemini-nano-banana-2.1-4k", display_name: "Nano Banana 2.1 · 4K", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9","1:4","4:1","1:8","8:1"], styles: [] }
 ];
 
 // Only these models are shown in the app.
-const ALLOWED_MODELS = new Set(["gpt-image-2.5-sunburst-按次", "gemini-nano-banana-2.1", "gemini-nano-banana-2.1-2k", "gemini-nano-banana-2.1-4k"]);
+const ALLOWED_MODELS = new Set(["gpt-image-2.5-sunburst", "gemini-nano-banana-2.1", "gemini-nano-banana-2.1-2k", "gemini-nano-banana-2.1-4k"]);
 
 const state = {
   settings: { apiKeys: [], baseUrl: REAL_BASE, autoSave: true, saveFolder: "" },
@@ -1711,7 +1711,7 @@ $("#btnTestKeys").addEventListener("click", async e => {
       if (data.ok) {
         ok++;
         row.classList.add("ktr-ok");
-        statusEl.textContent = `OK · ${data.site || data.provider || "upstream"}`;
+        statusEl.textContent = "OK";
       } else if (data.status === 429) {
         bad++;
         row.classList.add("ktr-warn");
@@ -1770,7 +1770,7 @@ $("#btnTestConn").addEventListener("click", async e => {
     });
     const d = await res.json().catch(() => ({}));
     const who = d.key ? ` [${d.key}, ${d.len} chars, ${d.how || "as given"}, from ${d.source}]` : "";
-    if (d.ok) toast(`Connected — ${d.site || d.provider || "upstream"} accepted key ${d.key}.`, "success");
+    if (d.ok) toast(`Connected — key ${d.key} accepted.`, "success");
     else if (d.status === 0) toast(`${d.error || "Network error"}`, "error");
     else toast(`Key ${d.key} rejected (HTTP ${d.status}): ${d.error || "no detail"}${who}`, "error");
   } catch (err) {
