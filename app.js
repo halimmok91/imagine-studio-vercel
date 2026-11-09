@@ -415,12 +415,7 @@ async function loadModels() {
     // The server tells us whether it already holds a key. If it does, the
     // Settings box is optional and we don't nag the user for one.
     state.keyRequired = data.keyRequired !== false;
-    // Show which upstreams the server is using. Read-only: direct requests
-    // would bypass the server and expose the key in the browser.
-    const ups = data.upstreams || {};
-    state.upstream = Object.values(ups).join("  +  ") || data.upstream || "";
-    const bu = $("#baseUrlInput");
-    if (bu) bu.value = state.upstream;
+    // Base URLs stay server-side; users only supply their own API key.
     const list = (data.models || []).filter(m => m.enabled !== false && m.id && ALLOWED_MODELS.has(m.id));
     if (!list.length) throw new ApiError(500, "No models available.");
     state.models = list;
@@ -1682,7 +1677,6 @@ $("#lightbox").addEventListener("click", e => {
 
 function openSettings() {
   $("#apiKeysInput").value = (state.settings.apiKeys || []).join("\n");
-  $("#baseUrlInput").value = state.settings.baseUrl;
   $("#autoSaveToggle").checked = !!state.settings.autoSave;
   $("#settingsOverlay").hidden = false;
   $("#apiKeysInput").focus();
