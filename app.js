@@ -226,17 +226,14 @@ const LUCID_STYLES = ["dynamic", "creative", "fashion", "portrait", "cinematic",
 const SHORT_STYLES = ["dynamic", "creative", "fashion", "cinematic", "portrait", "stock-photo", "vibrant"];
 
 const FALLBACK_MODELS = [
-  { id: "m1", display_name: "GPT Image 2.5 · Sunburst", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1", "16:9", "9:16"], styles: [] },
-  { id: "m2", display_name: "Nano Banana 2 · 1K", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9","1:4","4:1","1:8","8:1"], styles: [] },
-  { id: "m3", display_name: "Nano Banana 2 · 2K", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9","1:4","4:1","1:8","8:1"], styles: [] },
-  { id: "m4", display_name: "Nano Banana 2 · 4K", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9","1:4","4:1","1:8","8:1"], styles: [] }
+  { id: "gpt-image-2.5-sunburst-按次", display_name: "GPT Image 2.5 · Sunburst", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1", "16:9", "9:16"], styles: [] },
+  { id: "gemini-nano-banana-2.1", display_name: "Nano Banana 2.1 · 1K", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9","1:4","4:1","1:8","8:1"], styles: [] },
+  { id: "gemini-nano-banana-2.1-2k", display_name: "Nano Banana 2.1 · 2K", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9","1:4","4:1","1:8","8:1"], styles: [] },
+  { id: "gemini-nano-banana-2.1-4k", display_name: "Nano Banana 2.1 · 4K", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9","1:4","4:1","1:8","8:1"], styles: [] }
 ];
 
 // Only these models are shown in the app.
-// Temporarily offline for testers. Re-enable by restoring the set to
-// ["m1","m2","m3","m4"] here AND clearing DISABLED_MODELS in
-// api/_lib/handler.js - the server refuses disabled models too.
-const ALLOWED_MODELS = new Set(["m1"]);
+const ALLOWED_MODELS = new Set(["gpt-image-2.5-sunburst-按次", "gemini-nano-banana-2.1", "gemini-nano-banana-2.1-2k", "gemini-nano-banana-2.1-4k"]);
 
 const state = {
   settings: { apiKeys: [], baseUrl: REAL_BASE, autoSave: true, saveFolder: "" },
@@ -420,8 +417,12 @@ async function loadModels() {
     // The server tells us whether it already holds a key. If it does, the
     // Settings box is optional and we don't nag the user for one.
     state.keyRequired = data.keyRequired !== false;
-    // Don't surface upstream hosts anywhere in the UI — users of a shared link
-    // shouldn't see which relay is behind the app.
+    // Show which upstreams the server is using. Read-only: direct requests
+    // would bypass the server and expose the key in the browser.
+    const ups = data.upstreams || {};
+    state.upstream = Object.values(ups).join("  +  ") || data.upstream || "";
+    const bu = $("#baseUrlInput");
+    if (bu) bu.value = state.upstream;
     const list = (data.models || []).filter(m => m.enabled !== false && m.id && ALLOWED_MODELS.has(m.id));
     if (!list.length) throw new ApiError(500, "No models available.");
     state.models = list;
@@ -1714,7 +1715,7 @@ $("#btnTestKeys").addEventListener("click", async e => {
       if (data.ok) {
         ok++;
         row.classList.add("ktr-ok");
-        statusEl.textContent = "OK";
+        statusEl.textContent = `OK · ${data.site || data.provider || "upstream"}`;
       } else if (data.status === 429) {
         bad++;
         row.classList.add("ktr-warn");
@@ -1773,7 +1774,7 @@ $("#btnTestConn").addEventListener("click", async e => {
     });
     const d = await res.json().catch(() => ({}));
     const who = d.key ? ` [${d.key}, ${d.len} chars, ${d.how || "as given"}, from ${d.source}]` : "";
-    if (d.ok) toast(`Connected — key ${d.key} accepted.`, "success");
+    if (d.ok) toast(`Connected — ${d.site || d.provider || "upstream"} accepted key ${d.key}.`, "success");
     else if (d.status === 0) toast(`${d.error || "Network error"}`, "error");
     else toast(`Key ${d.key} rejected (HTTP ${d.status}): ${d.error || "no detail"}${who}`, "error");
   } catch (err) {
