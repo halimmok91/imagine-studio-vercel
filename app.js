@@ -243,7 +243,7 @@ const state = {
   model: null,
   sel: { ratio: "1:1", quality: null, style: "", mode: "" },
   batch: 1,
-  delayMs: 0,
+  delayMs: 5000,
   seq: false,
   refs: [],
   jobs: new Map(),
@@ -545,7 +545,7 @@ function syncBatchUI() {
   });
   localStorage.setItem(LS.batch, String(n));
   const d = $("#delayInput");
-  if (d) d.value = state.delayMs || 0;
+  if (d) d.value = 5000;
   const sq = $("#seqToggle");
   if (sq) {
     sq.checked = shouldQueue(n);
@@ -568,9 +568,8 @@ document.querySelectorAll("#batchChips .chip").forEach(c => {
 });
 
 $("#delayInput")?.addEventListener("input", e => {
-  const v = parseInt(e.target.value, 10);
-  state.delayMs = (v >= 0 && v <= 60000) ? v : 0;
-  localStorage.setItem(LS.delay, String(state.delayMs));
+  state.delayMs = 5000;
+  e.target.value = "5000";
 });
 
 $("#seqToggle")?.addEventListener("change", e => {
@@ -2170,7 +2169,7 @@ document.addEventListener("keydown", e => {
   try { state.settings.saveFolder = localStorage.getItem("imagine.saveFolder") || ""; } catch (e) { state.settings.saveFolder = ""; }
   try { state.keyIdx = parseInt(localStorage.getItem("imagine.keyIdx") || "0", 10) || 0; } catch (e) { state.keyIdx = 0; }
   try { state.batch = Math.max(1, Math.min(4, parseInt(localStorage.getItem(LS.batch) || "1", 10) || 1)); } catch (e) { state.batch = 1; }
-  try { state.delayMs = Math.max(0, Math.min(60000, parseInt(localStorage.getItem(LS.delay) || "0", 10) || 0)); } catch (e) { state.delayMs = 0; }
+  state.delayMs = 5000;
   try { state.seq = localStorage.getItem(LS.seq) === "1"; } catch (e) { state.seq = false; }
   try { state.sort = localStorage.getItem(LS.sort) === "oldest" ? "oldest" : "newest"; } catch (e) { state.sort = "newest"; }
   // Restore prompt history (the list that powers the ▾ dropdown)

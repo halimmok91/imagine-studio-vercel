@@ -78,16 +78,7 @@
     }).observe(resizer, { attributes: true, attributeFilter: ['class'] });
   }
 
-  /* ── default stagger: 2000ms between jobs (first run only; still editable) ──
-     app.js reads localStorage "imagine.delay" — if the user has never set it,
-     seed 2000 so new installs default to a gentler pace. Input stays editable. */
-  try {
-    if (localStorage.getItem('imagine.delay') === null) {
-      localStorage.setItem('imagine.delay', '2000');
-      const d = $('#delayInput');
-      if (d) d.value = '2000';
-    }
-  } catch (e) {}
+  /* Queue stagger is fixed at 5000ms in app.js; not user-editable. */
 
   /* ── lightbox prev/next slide animation ──
      app.js swaps #lightboxImg.src inside renderLightbox(). We intercept the
