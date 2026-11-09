@@ -81,10 +81,9 @@ function cleanKey(raw) {
 // Every plausible form of the key, in order. Raw beats cleaned: a sanitizer
 // that eats one byte of a valid token looks exactly like a wrong key.
 //
-// Settings keys are tried first, then the server's configured provider key.
+// Every request uses the caller's own Settings key. Vercel keys are not a
+// fallback: otherwise visitors could spend the site owner's provider balance.
 function keyCandidates(req, provider) {
-  const P = PROVIDERS[provider] || PROVIDERS.aiapi;
-  const envKey = process.env[P.envVar] || "";
   const h = (req.headers["authorization"] || "").replace(/^Bearer\s+/i, "");
   const out = [];
   // Settings key first — the customer's own quota.
@@ -93,9 +92,6 @@ function keyCandidates(req, provider) {
     if (!out.some((c) => c.key === raw)) out.push({ key: raw, src, how: "as given" });
     const c = cleanKey(raw);
     if (c && !out.some((x) => x.key === c)) out.push({ key: c, src, how: "after stripping invisible chars" });
-  }
-  if (envKey && !out.some((c) => c.key === envKey)) {
-    out.push({ key: envKey, src: "env", how: "as given" });
   }
   return out;
 }

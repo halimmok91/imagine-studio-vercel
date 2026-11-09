@@ -433,17 +433,14 @@ async function loadModels() {
     if (e.status !== 401) toast(`Could not fetch models (${e.message}). Using offline catalogue.`, "error");
   }
   if (state.keyRequired && !state.settings.apiKeys.length) { setConn("nokey"); openSettings(); }
-  state.availableModels = state.models;
   refreshModels();
 }
 
 function refreshModels() {
-  // No key test yet: keep the catalogue usable. After testing, restrict it to
-  // providers with at least one working key (or a configured server key).
-  const hasKeys = state.keyProviders.size > 0;
-  state.availableModels = hasKeys
+  // Only a successfully tested key enables its provider's models.
+  state.availableModels = state.keyProviders.size
     ? state.models.filter(m => state.keyProviders.has(m.provider))
-    : state.models;
+    : [];
   populateModels();
 }
 
@@ -979,7 +976,11 @@ function buildErrorCard(job, message) {
 
 async function generate() {
   const prompt = $("#promptInput").value.trim();
-  if (state.keyRequired !== false && !state.settings.apiKeys.length) { openSettings(); return; }
+  if (!state.settings.apiKeys.length || !state.model) {
+    toast("Add and test a valid API key in Settings first.", "error");
+    openSettings();
+    return;
+  }
   if (!prompt) { toast("Write a prompt first.", "info"); $("#promptInput").focus(); return; }
   if (state.refs.some(r => r.status === "uploading")) { toast("Still uploading references — one moment.", "info"); return; }
   // Record prompt in history (most-recent first, deduped, max 30)

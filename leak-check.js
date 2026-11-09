@@ -107,11 +107,11 @@ async function call(handler, method, url, headers, body) {
     assert.match(res._json.error, /gemini-nano-banana-2\.1/);
     assert.match(res._json.error, /127\.0\.0\.1:3002/);
 
-    // Server keys work without the retired admin token.
+    // Server keys must never authorize a request without a Settings key.
     process.env.AIAPI_KEY = "sk-server";
     res = await call(handler, "POST", "/api/public/v1/generate",
       { "x-app-password": "pw" }, { prompt: "server key", model_id: "gpt-image-2.5-sunburst" });
-    assert.strictEqual(res._code, 200, JSON.stringify(res._json));
+    assert.strictEqual(res._code, 401, "keyless generation must be rejected");
     delete process.env.AIAPI_KEY;
 
     res = await call(handler, "POST", "/api/public/v1/verify", auth, {});
