@@ -238,6 +238,8 @@ const ALLOWED_MODELS = new Set(["gpt-image-2.5-sunburst", "gemini-nano-banana-2.
 const state = {
   settings: { apiKeys: [], baseUrl: REAL_BASE, autoSave: true, saveFolder: "" },
   models: [],
+  availableModels: [],
+  keyProviders: new Set(),
   model: null,
   sel: { ratio: "1:1", quality: null, style: "", mode: "" },
   batch: 1,
@@ -431,26 +433,42 @@ async function loadModels() {
     if (e.status !== 401) toast(`Could not fetch models (${e.message}). Using offline catalogue.`, "error");
   }
   if (state.keyRequired && !state.settings.apiKeys.length) { setConn("nokey"); openSettings(); }
+  state.availableModels = state.models;
+  refreshModels();
+}
+
+function refreshModels() {
+  // No key test yet: keep the catalogue usable. After testing, restrict it to
+  // providers with at least one working key (or a configured server key).
+  const hasKeys = state.keyProviders.size > 0;
+  state.availableModels = hasKeys
+    ? state.models.filter(m => state.keyProviders.has(m.provider))
+    : state.models;
   populateModels();
 }
 
 function populateModels() {
   const sel = $("#modelSelect");
   sel.innerHTML = "";
-  state.models.forEach(m => {
+  state.availableModels.forEach(m => {
     const o = document.createElement("option");
     o.value = m.id;
     o.textContent = m.display_name || m.id;
     sel.appendChild(o);
   });
   const saved = localStorage.getItem(LS.model);
-  const pick = state.models.find(m => m.id === saved) ? saved : state.models[0].id;
+  const pick = state.availableModels.find(m => m.id === saved) ? saved : (state.availableModels[0] || {}).id || "";
   sel.value = pick;
-  applyModel();
+  if (state.availableModels.length) applyModel();
+  else {
+    state.model = null;
+    $("#modelHint").textContent = "Test a valid key in Settings";
+    $("#refsPanel").hidden = true;
+  }
 }
 
 function currentModel() {
-  return state.models.find(m => m.id === $("#modelSelect").value) || state.models[0];
+  return state.availableModels.find(m => m.id === $("#modelSelect").value) || state.availableModels[0];
 }
 
 function applyModel() {
@@ -1694,6 +1712,7 @@ $("#btnTestKeys").addEventListener("click", async e => {
   btn.disabled = true;
   const base = (state.settings.baseUrl || REAL_BASE).replace(/\/+$/, "");
   let ok = 0, bad = 0;
+  const verified = new Set();
   for (let i = 0; i < raw.length; i++) {
     const row = document.createElement("div");
     row.className = "ktr-row";
@@ -1711,6 +1730,7 @@ $("#btnTestKeys").addEventListener("click", async e => {
       const statusEl = row.querySelector(".ktr-status");
       if (data.ok) {
         ok++;
+        if (data.provider) verified.add(data.provider);
         row.classList.add("ktr-ok");
         statusEl.textContent = "OK";
       } else if (data.status === 429) {
@@ -1733,6 +1753,8 @@ $("#btnTestKeys").addEventListener("click", async e => {
   summary.className = "ktr-row";
   summary.innerHTML = `<span class="ktr-key">Summary</span><span class="ktr-status ${ok === raw.length ? "ktr-ok" : "ktr-warn"}">${ok}/${raw.length} OK</span>`;
   box.appendChild(summary);
+  state.keyProviders = verified;
+  refreshModels();
   btn.textContent = "Test all keys";
   btn.disabled = false;
 });
@@ -1754,7 +1776,7 @@ $("#btnSaveSettings").addEventListener("click", () => {
   kvPut("baseUrl", state.settings.baseUrl);
   kvPut("autoSave", state.settings.autoSave ? "1" : "0");
   closeSettings();
-  toast(`Settings saved — ${raw.length} API key${raw.length === 1 ? "" : "s"} in rotation.`, "success");
+  toast(`Settings saved — ${raw.length} API key${raw.length === 1 ? "" : "s"} in rotation. Test keys to enable their models.`, "success");
   loadModels();
 });
 
