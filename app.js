@@ -358,7 +358,7 @@ async function api(path, opts = {}) {
   }
   let data = {};
   try { data = await res.json(); } catch (e) {}
-  const errDetail = (!res.ok && (data.error || data.message)) ? String(data.error || data.message).slice(0, 80) : "";
+  const errDetail = (!res.ok && (data.error || data.message)) ? String(data.error || data.message) : "";
   logReq(opts.method || "GET", path, keyObj && keyObj.idx, res.status, errDetail);
   // Server asked for the site password. Prompt once, store for the session,
   // retry the request so the user doesn't have to redo their action.
@@ -1123,7 +1123,7 @@ async function startJob(params, idx) {
     } catch (e) {
       // Retry transient provider failures automatically. A token can work on
       // the next request when an upstream pool rotates or times out.
-      const transient = [401, 429, 502, 503, 504].includes(e.status) ||
+      const transient = [429, 502, 503, 504].includes(e.status) ||
         (e.status === 0 && /fetch|network|abort|timeout/i.test(e.message));
       if (transient && attempt < MAX_RETRIES && !job.cancelled) {
         job.retries = attempt + 1;
