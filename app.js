@@ -536,16 +536,17 @@ function syncBatchUI() {
   const d = $("#delayInput");
   if (d) d.value = state.delayMs || 0;
   const sq = $("#seqToggle");
-  if (sq) sq.checked = !!state.seq;
+  if (sq) {
+    sq.checked = shouldQueue(n);
+    sq.disabled = n >= 2;
+  }
   const hint = $("#batchModeHint");
-  if (hint) hint.textContent = state.seq ? "Queue on" : "Parallel";
+  if (hint) hint.textContent = shouldQueue(n) ? "Queue on" : "Parallel";
 }
 
-// Queueing is opt-in only. It used to be forced on for any batch of 2+, as a
-// way around the account's RPM cap; that auto-queue is removed so concurrent
-// generation can be tested properly. The manual toggle still works.
+// Batches default to sequential; batch 1 can opt into the manual queue too.
 function shouldQueue(n) {
-  return !!state.seq;
+  return n >= 2 || !!state.seq;
 }
 
 document.querySelectorAll("#batchChips .chip").forEach(c => {
