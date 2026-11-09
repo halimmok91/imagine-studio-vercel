@@ -252,6 +252,7 @@ const state = {
   galleryTags: [],
   refSeq: 0,
   keyIdx: 0,
+  workingKeys: new Set(),
   sort: "newest"
 };
 
@@ -1115,15 +1116,18 @@ async function startJob(params, idx) {
       // generation_id and polled; a serverless function cannot hold job state
       // between invocations, so this waits for the image in one request.
       job.gid = "gen_" + Date.now().toString(36);
+      state.workingKeys.add(job.key);
       job.progress = 100;
       const urls = data.result_urls || data.urls || [];
       if (urls.length) finishJob(job, urls);
       else failJob(job, "Finished without an image.");
       break;
     } catch (e) {
-      // Retry transient provider failures automatically. A token can work on
-      // the next request when an upstream pool rotates or times out.
-      const transient = [429, 502, 503, 504].includes(e.status) ||
+      // A permanently invalid key should fail immediately. If this exact key
+      // already produced an image in this session, an intermittent upstream
+      // "Invalid token" response is worth retrying with that same key.
+      const intermittentToken = e.status === 401 && state.workingKeys.has(job.key);
+      const transient = intermittentToken || [429, 502, 503, 504].includes(e.status) ||
         (e.status === 0 && /fetch|network|abort|timeout/i.test(e.message));
       if (transient && attempt < MAX_RETRIES && !job.cancelled) {
         job.retries = attempt + 1;
