@@ -47,14 +47,14 @@ async function call(handler, method, url, headers, body) {
   const s2 = await startMock(3002, "goodapi");
   try {
     Object.assign(process.env, {
-      PROV1_BASE: "http://127.0.0.1:3001",
-      PROV2_BASE: "http://127.0.0.1:3002",
-      PROV1_MODEL: "gpt-image-2.5-sunburst-按次",
-      PROV2_MODEL_1K: "gemini-nano-banana-2.1",
-      PROV2_MODEL_2K: "gemini-nano-banana-2.1-2k",
-      PROV2_MODEL_4K: "gemini-nano-banana-2.1-4k",
-      PROV1_KEY: "sk-env-aiapi", PROV2_KEY: "sk-env-goodapi",
-      APP_PASSWORD: "pw", ADMIN_TOKEN: "adm",
+      AIAPI_BASE: "http://127.0.0.1:3001",
+      GOODAPI_BASE: "http://127.0.0.1:3002",
+      AIAPI_MODEL: "gpt-image-2.5-sunburst-按次",
+      GOODAPI_MODEL_1K: "gemini-nano-banana-2.1",
+      GOODAPI_MODEL_2K: "gemini-nano-banana-2.1-2k",
+      GOODAPI_MODEL_4K: "gemini-nano-banana-2.1-4k",
+      AIAPI_KEY: "", GOODAPI_KEY: "",
+      APP_PASSWORD: "pw",
     });
     delete require.cache[require.resolve("./api/_lib/handler.js")];
     const handler = require("./api/_lib/handler.js");
@@ -65,7 +65,7 @@ async function call(handler, method, url, headers, body) {
 
     res = await call(handler, "GET", "/api/public/v1/models", auth);
     assert.strictEqual(res._code, 200);
-    assert.strictEqual(res._json.keyRequired, false);
+    assert.strictEqual(res._json.keyRequired, true);
     assert.deepStrictEqual(res._json.upstreams, { aiapi: "http://127.0.0.1:3001", goodapi: "http://127.0.0.1:3002" });
     assert.deepStrictEqual(res._json.models.map((m) => [m.id, m.provider]), [
       ["gpt-image-2.5-sunburst-按次", "aiapi"],
@@ -106,6 +106,13 @@ async function call(handler, method, url, headers, body) {
     assert.match(res._json.error, /无效的令牌/);
     assert.match(res._json.error, /gemini-nano-banana-2\.1/);
     assert.match(res._json.error, /127\.0\.0\.1:3002/);
+
+    // Server keys work without the retired admin token.
+    process.env.AIAPI_KEY = "sk-server";
+    res = await call(handler, "POST", "/api/public/v1/generate",
+      { "x-app-password": "pw" }, { prompt: "server key", model_id: "gpt-image-2.5-sunburst-按次" });
+    assert.strictEqual(res._code, 200, JSON.stringify(res._json));
+    delete process.env.AIAPI_KEY;
 
     res = await call(handler, "POST", "/api/public/v1/verify", auth, {});
     assert.strictEqual(res._code, 200);

@@ -7,22 +7,19 @@
 //   2. No filesystem, so the six disk endpoints are gone. Save/Export use the
 //      browser's own download instead.
 
-// Provider hosts and model names come from environment variables. The old
-// PROV1_*/PROV2_* names remain accepted for existing deployments.
+// Provider hosts and model names come from AIAPI_*/GOODAPI_* variables.
 //
 // This file lives under api/_lib because Vercel ignores underscore-prefixed
 // files inside api/, so the implementation is not exposed as a public route.
 const PROVIDERS = {
   aiapi: {
-    base: (process.env.AIAPI_BASE || process.env.PROV1_BASE || "").replace(/\/+$/, ""),
+    base: (process.env.AIAPI_BASE || "").replace(/\/+$/, ""),
     envVar: "AIAPI_KEY",
-    oldEnvVar: "PROV1_KEY",
     label: "ai-api.pro",
   },
   goodapi: {
-    base: (process.env.GOODAPI_BASE || process.env.PROV2_BASE || "").replace(/\/+$/, ""),
+    base: (process.env.GOODAPI_BASE || "").replace(/\/+$/, ""),
     envVar: "GOODAPI_KEY",
-    oldEnvVar: "PROV2_KEY",
     label: "goodapi.click",
   },
 };
@@ -37,10 +34,10 @@ const GEMINI_RATIOS = [
 ];
 
 const MODEL_ROWS = [
-  { id: "gpt-image-2.5-sunburst-按次", model_id: process.env.AIAPI_MODEL || process.env.PROV1_MODEL || "", display_name: "GPT Image 2.5 · Sunburst", provider: "aiapi", ratios: Object.keys(SIZES) },
-  { id: "gemini-nano-banana-2.1", model_id: process.env.GOODAPI_MODEL_1K || process.env.PROV2_MODEL_1K || "", display_name: "Nano Banana 2.1 · 1K", provider: "goodapi", ratios: GEMINI_RATIOS },
-  { id: "gemini-nano-banana-2.1-2k", model_id: process.env.GOODAPI_MODEL_2K || process.env.PROV2_MODEL_2K || "", display_name: "Nano Banana 2.1 · 2K", provider: "goodapi", ratios: GEMINI_RATIOS },
-  { id: "gemini-nano-banana-2.1-4k", model_id: process.env.GOODAPI_MODEL_4K || process.env.PROV2_MODEL_4K || "", display_name: "Nano Banana 2.1 · 4K", provider: "goodapi", ratios: GEMINI_RATIOS },
+  { id: "gpt-image-2.5-sunburst-按次", model_id: process.env.AIAPI_MODEL || "", display_name: "GPT Image 2.5 · Sunburst", provider: "aiapi", ratios: Object.keys(SIZES) },
+  { id: "gemini-nano-banana-2.1", model_id: process.env.GOODAPI_MODEL_1K || "", display_name: "Nano Banana 2.1 · 1K", provider: "goodapi", ratios: GEMINI_RATIOS },
+  { id: "gemini-nano-banana-2.1-2k", model_id: process.env.GOODAPI_MODEL_2K || "", display_name: "Nano Banana 2.1 · 2K", provider: "goodapi", ratios: GEMINI_RATIOS },
+  { id: "gemini-nano-banana-2.1-4k", model_id: process.env.GOODAPI_MODEL_4K || "", display_name: "Nano Banana 2.1 · 4K", provider: "goodapi", ratios: GEMINI_RATIOS },
 ];
 
 // Temporarily take models offline by listing their real public ids here.
@@ -84,18 +81,10 @@ function cleanKey(raw) {
 // Every plausible form of the key, in order. Raw beats cleaned: a sanitizer
 // that eats one byte of a valid token looks exactly like a wrong key.
 //
-// The env key is NOT a default. A paying customer pastes the key they bought
-// (Settings), and that is tried first — their relay quota, their spend. The
-// baked-in env key is appended only when the request also carries the admin
-// token, so a random visitor with the site password cannot spend your balance.
-// ADMIN_TOKEN unset = env key unreachable from the API at all.
+// Settings keys are tried first, then the server's configured provider key.
 function keyCandidates(req, provider) {
   const P = PROVIDERS[provider] || PROVIDERS.aiapi;
-  // Fall back to the old env var name so a deployment that still has
-  // AIAPI_KEY / GOODAPI_KEY works without retyping a key.
-  const envKey = process.env[P.envVar] || process.env[P.oldEnvVar] || "";
-  const adminTok = process.env.ADMIN_TOKEN || "";
-  const isAdmin = adminTok && req.headers["x-admin-token"] === adminTok;
+  const envKey = process.env[P.envVar] || "";
   const h = (req.headers["authorization"] || "").replace(/^Bearer\s+/i, "");
   const out = [];
   // Settings key first — the customer's own quota.
@@ -105,7 +94,7 @@ function keyCandidates(req, provider) {
     const c = cleanKey(raw);
     if (c && !out.some((x) => x.key === c)) out.push({ key: c, src, how: "after stripping invisible chars" });
   }
-  if (isAdmin && envKey && !out.some((c) => c.key === envKey)) {
+  if (envKey && !out.some((c) => c.key === envKey)) {
     out.push({ key: envKey, src: "env", how: "as given" });
   }
   return out;
@@ -137,8 +126,8 @@ module.exports = async function handler(req, res) {
   // ---- GET /api/public/v1/models --------------------------------------
   if (url === "/api/public/v1/models" && req.method === "GET") {
     const keyed = {
-      aiapi: !!(process.env.AIAPI_KEY || process.env.PROV1_KEY),
-      goodapi: !!(process.env.GOODAPI_KEY || process.env.PROV2_KEY),
+      aiapi: !!process.env.AIAPI_KEY,
+      goodapi: !!process.env.GOODAPI_KEY,
     };
     return json(res, 200, {
       models: MODELS,

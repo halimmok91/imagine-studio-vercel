@@ -62,7 +62,14 @@ if (-not (Test-Path .vercel\project.json) -and -not (Test-Path .vercel\repo.json
 $tmp = Join-Path $env:TEMP "vercel-env-value.txt"
 $failed = @()
 
-foreach ($name in @('PROV1_BASE', 'PROV1_KEY', 'PROV1_MODEL', 'PROV2_BASE', 'PROV2_KEY', 'PROV2_MODEL_1K', 'PROV2_MODEL_2K', 'PROV2_MODEL_4K', 'APP_PASSWORD', 'ADMIN_TOKEN')) {
+# Remove the retired provider aliases and the old admin-token gate.
+foreach ($old in @('PROV1_BASE', 'PROV1_KEY', 'PROV1_MODEL', 'PROV2_BASE', 'PROV2_KEY', 'PROV2_MODEL_1K', 'PROV2_MODEL_2K', 'PROV2_MODEL_4K', 'ADMIN_TOKEN')) {
+  $rm = Run-Cmd "vercel env rm $old production --yes"
+  if ($rm.code -eq 0) { Write-Host "Removed obsolete $old" }
+  Start-Sleep -Milliseconds 1500
+}
+
+foreach ($name in @('AIAPI_BASE', 'AIAPI_KEY', 'AIAPI_MODEL', 'GOODAPI_BASE', 'GOODAPI_KEY', 'GOODAPI_MODEL_1K', 'GOODAPI_MODEL_2K', 'GOODAPI_MODEL_4K', 'APP_PASSWORD')) {
   $val = $vars[$name]
   if (-not $val) { Write-Host "Skipping $name (blank in .env.local)"; continue }
   [System.IO.File]::WriteAllText($tmp, $val, (New-Object System.Text.UTF8Encoding $false))

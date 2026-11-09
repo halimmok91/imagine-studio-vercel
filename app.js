@@ -346,10 +346,6 @@ async function api(path, opts = {}) {
   // survives reload but not a new browser — not a persistent credential store.
   const appPw = sessionStorage.getItem("appPw");
   if (appPw) headers["x-app-password"] = appPw;
-  // Admin token: only present if you set it locally. Lets you fall back to the
-  // server's baked-in key for testing. Customers never have this.
-  const adminTok = localStorage.getItem("adminTok");
-  if (adminTok) headers["x-admin-token"] = adminTok;
   const { _key, _keyIdx, ...fetchOpts } = opts;
   let res;
   try {

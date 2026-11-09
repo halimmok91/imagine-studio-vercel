@@ -16,38 +16,30 @@ files, import the repo, set env vars.
    | Name | Value | Needed |
    |---|---|---|
    | `APP_PASSWORD` | site password | to lock the site |
-   | `ADMIN_TOKEN` | admin secret | lets you use the server key |
 
    Everything else — the relay base URLs and upstream model ids — also comes
    from env vars. The full set is in `.env.local`:
 
    | Name | Value |
    |---|---|
-   | `PROV1_BASE` / `PROV1_KEY` / `PROV1_MODEL` | provider 1 |
-   | `PROV2_BASE` / `PROV2_KEY` | provider 2 |
-   | `PROV2_MODEL_1K` / `_2K` / `_4K` | provider 2 model ids |
+   | `AIAPI_BASE` / `AIAPI_KEY` / `AIAPI_MODEL` | provider 1 |
+   | `GOODAPI_BASE` / `GOODAPI_KEY` | provider 2 |
+   | `GOODAPI_MODEL_1K` / `_2K` / `_4K` | provider 2 model ids |
 
    Some of the model ids contain non-ASCII characters, so use `push-env.ps1`
    rather than pasting them into the dashboard by hand — it reads and writes
    UTF-8 and keeps them intact.
 
    Customers can also paste their own key in the app's Settings panel — that
-   path stores it in the browser only and spends their relay quota, not yours.
-   The server-side key is only reachable with the admin token.
+   path stores it in the browser only. Settings keys are tried before the
+   server's configured provider key.
 5. Redeploy. Open the URL.
 
-## Upstream identity is deliberately hidden
+## Upstream metadata
 
-The client never sees which relay is behind the app. The public model ids are
-opaque (`m1`–`m4`), the models response carries no host, provider, or upstream
-model field, upstream error text is scrubbed of host names and model ids before
-it reaches the browser, and any CDN image URL the relay returns is fetched
-server-side and inlined as a data URL — so the relay's hostname never appears
-in the network tab.
-
-The base URLs and model ids live in env vars, not in the source. Keep it that
-way if you share this repo — a hostname in the source, the README, or a
-client-visible id undoes the whole thing.
+The app shows the real provider names, model ids and upstream base URLs in
+Settings. Upstream errors are returned unchanged to aid troubleshooting, and
+generated CDN image URLs are passed directly to the browser.
 
 ## The handler is not a static file
 
