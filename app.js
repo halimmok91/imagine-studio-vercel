@@ -345,10 +345,6 @@ async function api(path, opts = {}) {
   } else keyObj = nextKey();
   const key = keyObj ? keyObj.key : "";
   if (key) headers.Authorization = `Bearer ${key}`;
-  // Site password (APP_PASSWORD on the server). Stored in sessionStorage so it
-  // survives reload but not a new browser — not a persistent credential store.
-  const appPw = sessionStorage.getItem("appPw");
-  if (appPw) headers["x-app-password"] = appPw;
   const { _key, _keyIdx, ...fetchOpts } = opts;
   let res;
   try {
@@ -361,14 +357,6 @@ async function api(path, opts = {}) {
   try { data = await res.json(); } catch (e) {}
   const errDetail = (!res.ok && (data.error || data.message)) ? String(data.error || data.message) : "";
   logReq(opts.method || "GET", path, keyObj && keyObj.idx, res.status, errDetail);
-  // Server asked for the site password. Prompt once, store for the session,
-  // retry the request so the user doesn't have to redo their action.
-  if (res.status === 401 && data.auth) {
-    const pw = prompt("Enter the site password:", sessionStorage.getItem("appPw") || "");
-    if (pw === null) throw new ApiError(401, "Password required.");
-    sessionStorage.setItem("appPw", pw);
-    return api(path, opts);
-  }
   if (!res.ok) {
     const msg = data.error || data.message || `Request failed (${res.status})`;
     throw new ApiError(res.status, msg);
@@ -1718,10 +1706,7 @@ $("#btnTestKeys").addEventListener("click", async e => {
     try {
       const res = await fetch(base + "/api/public/v1/verify", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${raw[i]}`,
-          "x-app-password": sessionStorage.getItem("appPw") || "",
-        },
+        headers: { Authorization: `Bearer ${raw[i]}` },
       });
       const data = await res.json().catch(() => ({}));
       const statusEl = row.querySelector(".ktr-status");

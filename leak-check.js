@@ -54,14 +54,13 @@ async function call(handler, method, url, headers, body) {
       GOODAPI_MODEL_2K: "gemini-nano-banana-2.1-2k",
       GOODAPI_MODEL_4K: "gemini-nano-banana-2.1-4k",
       AIAPI_KEY: "", GOODAPI_KEY: "",
-      APP_PASSWORD: "pw",
     });
     delete require.cache[require.resolve("./api/_lib/handler.js")];
     const handler = require("./api/_lib/handler.js");
-    const auth = { "x-app-password": "pw", authorization: "Bearer sk-testkey1234567890" };
+    const auth = { authorization: "Bearer sk-testkey1234567890" };
 
     let res = await call(handler, "GET", "/api/public/v1/models", {});
-    assert.strictEqual(res._code, 401, "password gate must run");
+    assert.strictEqual(res._code, 200, "site opens without a password");
 
     res = await call(handler, "GET", "/api/public/v1/models", auth);
     assert.strictEqual(res._code, 200);
@@ -100,7 +99,7 @@ async function call(handler, method, url, headers, body) {
 
     // Upstream errors remain verbatim and include routing diagnostics.
     res = await call(handler, "POST", "/api/public/v1/generate",
-      { "x-app-password": "pw", authorization: "Bearer sk-invalid" },
+      { authorization: "Bearer sk-invalid" },
       { prompt: "hi", model_id: "gemini-nano-banana-2.1" });
     assert.strictEqual(res._code, 401);
     assert.match(res._json.error, /无效的令牌/);
@@ -110,7 +109,7 @@ async function call(handler, method, url, headers, body) {
     // Server keys must never authorize a request without a Settings key.
     process.env.AIAPI_KEY = "sk-server";
     res = await call(handler, "POST", "/api/public/v1/generate",
-      { "x-app-password": "pw" }, { prompt: "server key", model_id: "gpt-image-2.5-sunburst" });
+      {}, { prompt: "server key", model_id: "gpt-image-2.5-sunburst" });
     assert.strictEqual(res._code, 401, "keyless generation must be rejected");
     delete process.env.AIAPI_KEY;
 

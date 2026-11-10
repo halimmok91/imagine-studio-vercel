@@ -11,14 +11,8 @@ files, import the repo, set env vars.
    `vendor/` as folders.
 3. In Vercel: **Add New → Project → Import** that repo. Framework preset
    **Other**. No build command, no output directory.
-4. **Settings → Environment Variables**, add:
-
-   | Name | Value | Needed |
-   |---|---|---|
-   | `APP_PASSWORD` | site password | to lock the site |
-
-   Everything else is configured in Vercel only. Add the provider base URLs,
-   keys and upstream model ids as environment variables:
+4. **Settings → Environment Variables**, add the provider base URLs, upstream
+   model ids and any server keys:
 
    | Name | Value |
    |---|---|
@@ -49,15 +43,13 @@ as source.
 served — `https://your-site/_lib/handler.js` returned the whole server code.
 The `_lib` name is only safe because it sits inside `api/`.
 
-## Password gate
+## No root middleware
 
 **Do not add a root `middleware.js`.** Vercel's current CLI treats that file
 as a root proxy: it becomes the deployment's only entrypoint and suppresses
 both static file serving and `api/` function discovery. The symptom is a build
 that finishes in ~1s logging only `Compiling "middleware.js"`, followed by
 `404 NOT_FOUND` on every URL including `/api/public/v1/models`.
-
-The check lives in `api/_lib/handler.js` instead. `APP_PASSWORD` unset = gate off.
 
 ## Routing
 
