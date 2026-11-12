@@ -27,11 +27,14 @@ files, import the repo, set env vars.
    never used as a fallback for visitors.
 5. Redeploy. Open the URL.
 
-## Upstream metadata
+## Upstream identity is hidden
 
-The API exposes real provider and model metadata for routing and diagnostics.
-Upstream errors are returned unchanged, and generated CDN image URLs are passed
-directly to the browser.
+Public responses expose only model ids, display names, ratios and capabilities.
+Provider names, upstream base URLs, key flags and internal upstream model ids
+never leave the server. Upstream error messages are passed through verbatim,
+but without the provider host attached. Generated CDN image URLs go straight
+to the browser. The client maps model id to provider itself (`PROVIDER_OF` in
+`app.js`) so tested keys still unlock the right models.
 
 ## The handler is not a static file
 

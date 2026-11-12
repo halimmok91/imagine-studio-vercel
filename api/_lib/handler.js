@@ -44,11 +44,10 @@ const MODEL_ROWS = [
 // Disabled models are hidden from /models and refused by /generate.
 const DISABLED_MODELS = new Set([]);
 
-// Public metadata includes the provider so clients can inspect routing.
+// Public metadata intentionally omits provider identity and upstream URLs.
 const MODELS = MODEL_ROWS.filter((m) => !DISABLED_MODELS.has(m.id)).map((m) => ({
   id: m.id,
   display_name: m.display_name,
-  provider: m.provider,
   enabled: true,
   supports_reference_images: true,
   max_reference_images: 4,
@@ -105,23 +104,23 @@ const SRC_LABEL = { Settings: "Settings", env: "Vercel env" };
 
 const json = (res, code, obj) => res.status(code).json(obj);
 
+// Browsers that open an API URL directly get sent home; the app itself always
+// fetches with X-Requested-With, so it still receives JSON.
+function wantsHtml(req) {
+  return !req.headers["x-requested-with"] && (req.headers.accept || "").includes("text/html");
+}
+
 module.exports = async function handler(req, res) {
   const url = req.url.split("?")[0];
+  if (wantsHtml(req)) {
+    res.setHeader("Location", "/");
+    res.status(302).end();
+    return;
+  }
 
   // ---- GET /api/public/v1/models --------------------------------------
   if (url === "/api/public/v1/models" && req.method === "GET") {
-    const keyed = {
-      aiapi: !!process.env.AIAPI_KEY,
-      goodapi: !!process.env.GOODAPI_KEY,
-    };
-    return json(res, 200, {
-      models: MODELS,
-      keyRequired: !keyed.aiapi && !keyed.goodapi,
-      keyed,
-      upstream: PROVIDERS.aiapi.base,
-      upstreams: { aiapi: PROVIDERS.aiapi.base, goodapi: PROVIDERS.goodapi.base },
-      model: MODEL_ROWS[0].model_id,
-    });
+    return json(res, 200, { models: MODELS, keyRequired: true });
   }
 
   // ---- POST /api/public/v1/verify -------------------------------------
@@ -136,7 +135,7 @@ module.exports = async function handler(req, res) {
       for (const name of ["aiapi", "goodapi"]) {
         const P = PROVIDERS[name];
         if (!P.base) continue;
-        const hit = { key: maskKey(key), len: key.length, source: src, how, provider: name, site: P.label, base: P.base };
+        const hit = { key: maskKey(key), provider: name };
         try {
           const r = await fetch(P.base + "/v1/models", {
             headers: { Authorization: "Bearer " + key },
@@ -177,7 +176,7 @@ module.exports = async function handler(req, res) {
     }
     const keys = keyCandidates(req, provider);
     if (!keys.length) {
-      return json(res, 401, { error: "No key for " + P.label + ". Set " + P.envVar + " on the Vercel project, or paste a key in Settings." });
+      return json(res, 401, { error: "Add your API key in Settings first." });
     }
 
     const size = provider === "goodapi"
@@ -263,10 +262,9 @@ module.exports = async function handler(req, res) {
       if (!r.ok) {
         lastErr = String((j && (j.error?.message || j.message)) || text.slice(0, 300));
         if (r.status === 401 && more) continue;
-        // Identify the attempted key, model and upstream for troubleshooting.
+        // Keep the upstream message, but drop provider identity and URLs.
         return json(res, r.status, {
-          error: lastErr + "\n\nkey sent: " + maskKey(key) + " (" + key.length + " chars, " + how + ") from " +
-            (SRC_LABEL[src] || "your key") + " · model: " + row.model_id + " · site: " + P.base,
+          error: lastErr + "\n\nkey sent: " + maskKey(key) + " (" + key.length + " chars, " + how + ") from Settings · model: " + row.id,
         });
       }
 

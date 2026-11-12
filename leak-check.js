@@ -31,7 +31,9 @@ function startMock(port, provider) {
 
 function makeRes() {
   return {
-    _code: 0, _json: null,
+    _code: 0, _json: null, _headers: {},
+    setHeader(k, v) { this._headers[k.toLowerCase()] = v; return this; },
+    end() { return this; },
     status(code) { this._code = code; return this; },
     json(obj) { this._json = obj; return this; },
   };
@@ -57,20 +59,31 @@ async function call(handler, method, url, headers, body) {
     });
     delete require.cache[require.resolve("./api/_lib/handler.js")];
     const handler = require("./api/_lib/handler.js");
-    const auth = { authorization: "Bearer sk-testkey1234567890" };
+    const auth = { authorization: "Bearer sk-testkey1234567890", "x-requested-with": "fetch" };
 
     let res = await call(handler, "GET", "/api/public/v1/models", {});
     assert.strictEqual(res._code, 200, "site opens without a password");
 
+    // A browser opening the URL directly gets sent home; the app's fetches
+    // carry X-Requested-With so they still receive JSON.
+    res = await call(handler, "GET", "/api/public/v1/models", { accept: "text/html,application/xhtml+xml" });
+    assert.strictEqual(res._code, 302, "browser nav redirects");
+    assert.strictEqual(res._headers["location"], "/");
+
     res = await call(handler, "GET", "/api/public/v1/models", auth);
     assert.strictEqual(res._code, 200);
     assert.strictEqual(res._json.keyRequired, true);
-    assert.deepStrictEqual(res._json.upstreams, { aiapi: "http://127.0.0.1:3001", goodapi: "http://127.0.0.1:3002" });
-    assert.deepStrictEqual(res._json.models.map((m) => [m.id, m.provider]), [
-      ["gpt-image-2.5-sunburst", "aiapi"],
-      ["gemini-nano-banana-2.1", "goodapi"],
-      ["gemini-nano-banana-2.1-2k", "goodapi"],
-      ["gemini-nano-banana-2.1-4k", "goodapi"],
+    // Provider identity and upstream URLs must not be exposed.
+    const modelsRaw = JSON.stringify(res._json);
+    for (const bad of ["upstreams", "upstream", "keyed", "ai-api.pro", "goodapi.click", "127.0.0.1", "按次"]) {
+      assert.ok(!modelsRaw.includes(bad), "models response leaks " + bad);
+    }
+    assert.ok(res._json.models.every(m => m.provider === undefined), "models hide provider");
+    assert.deepStrictEqual(res._json.models.map(m => m.id), [
+      "gpt-image-2.5-sunburst",
+      "gemini-nano-banana-2.1",
+      "gemini-nano-banana-2.1-2k",
+      "gemini-nano-banana-2.1-4k",
     ]);
 
     // Reference images use edits and arrive as multipart image[] on first try.
@@ -97,29 +110,31 @@ async function call(handler, method, url, headers, body) {
     assert.strictEqual(payload.size, "16:9");
     assert.strictEqual(payload.response_format, "b64_json");
 
-    // Upstream errors remain verbatim and include routing diagnostics.
+    // Upstream errors keep the real message but hide provider host and model id.
     res = await call(handler, "POST", "/api/public/v1/generate",
       { authorization: "Bearer sk-invalid" },
       { prompt: "hi", model_id: "gemini-nano-banana-2.1" });
     assert.strictEqual(res._code, 401);
     assert.match(res._json.error, /无效的令牌/);
     assert.match(res._json.error, /gemini-nano-banana-2\.1/);
-    assert.match(res._json.error, /127\.0\.0\.1:3002/);
+    assert.ok(!/127\.0\.0\.1|goodapi\.click/.test(res._json.error), "error hides upstream host");
 
     // Server keys must never authorize a request without a Settings key.
     process.env.AIAPI_KEY = "sk-server";
     res = await call(handler, "POST", "/api/public/v1/generate",
       {}, { prompt: "server key", model_id: "gpt-image-2.5-sunburst" });
     assert.strictEqual(res._code, 401, "keyless generation must be rejected");
+    assert.ok(!/AIAPI_KEY|ai-api\.pro/.test(res._json.error), "keyless error hides provider and env var");
     delete process.env.AIAPI_KEY;
 
     res = await call(handler, "POST", "/api/public/v1/verify", auth, {});
     assert.strictEqual(res._code, 200);
     assert.strictEqual(res._json.ok, true);
     assert.strictEqual(res._json.provider, "aiapi");
-    assert.strictEqual(res._json.site, "ai-api.pro");
+    assert.strictEqual(res._json.site, undefined, "verify hides the site name");
+    assert.strictEqual(res._json.base, undefined, "verify hides the base URL");
 
-    console.log("self-check: OK (visible metadata, raw errors, Nano Banana routing, multipart references)");
+    console.log("self-check: OK (hidden metadata, raw upstream messages, Nano Banana routing, multipart references)");
   } finally {
     await Promise.all([new Promise((r) => s1.close(r)), new Promise((r) => s2.close(r))]);
   }

@@ -337,7 +337,7 @@ $("#btnClearLog")?.addEventListener("click", () => { reqLog.length = 0; renderRe
 
 async function api(path, opts = {}) {
   const base = state.settings.baseUrl.replace(/\/+$/, "");
-  const headers = { ...(opts.headers || {}) };
+  const headers = { "X-Requested-With": "fetch", ...(opts.headers || {}) };
   // Explicit key (for parallel batch) wins; otherwise rotate round-robin.
   let keyObj;
   if (opts._key !== undefined) {
@@ -420,10 +420,17 @@ async function loadModels() {
   refreshModels();
 }
 
+// The server no longer sends provider names, so map models locally.
+const PROVIDER_OF = {
+  "gpt-image-2.5-sunburst": "aiapi",
+  "gemini-nano-banana-2.1": "goodapi",
+  "gemini-nano-banana-2.1-2k": "goodapi",
+  "gemini-nano-banana-2.1-4k": "goodapi",
+};
 function refreshModels() {
   // Only a successfully tested key enables its provider's models.
   state.availableModels = state.keyProviders.size
-    ? state.models.filter(m => state.keyProviders.has(m.provider))
+    ? state.models.filter(m => state.keyProviders.has(PROVIDER_OF[m.id]))
     : [];
   populateModels();
 }
