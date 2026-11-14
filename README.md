@@ -17,7 +17,8 @@ files, import the repo, set env vars.
    | Name | Value |
    |---|---|
    | `AIAPI_BASE` / `AIAPI_KEY` / `AIAPI_MODEL` | provider 1 (Sunburst) |
-   | `AIAPI_MODEL_1K` / `_2K` / `_4K` | Nano Banana model ids on provider 1 |
+   | `AIAPI_MODEL_NANO` | optional; defaults to `nano-banana-2.1` |
+   | `AIAPI_MODEL_1K` / `_2K` / `_4K` | optional; override a tier's model id |
 
    Paste the non-ASCII model id carefully into Vercel's environment-variable
    value field. No local env file or env-sync script is needed.
@@ -34,6 +35,21 @@ never leave the server. Upstream error messages are passed through verbatim,
 but without the provider host attached. Generated CDN image URLs go straight
 to the browser. The client maps model id to provider itself (`PROVIDER_OF` in
 `app.js`) so tested keys still unlock the right models.
+
+## Two request shapes
+
+ai-api exposes its models on different endpoints, so the handler picks per model:
+
+| Model | Endpoint | Notes |
+|---|---|---|
+| `gpt-image-2.5-sunburst` | `/v1/images/generations` or `/v1/images/edits` | pixel `size`, `output_format`, multipart `image[]` for refs |
+| `gemini-nano-banana-2.1*` | `/v1/chat/completions` | ratio goes in the prompt, refs are inline `image_url` parts |
+
+The chat reply's image is pulled from `message.images`, `image_url` content
+parts, or a markdown/base64 image in the text. All three Nano Banana rows
+default to the dashboard's single `nano-banana-2.1` id, so no extra variables
+are needed. The card lists `/v1/chat/completions` as the OpenAI endpoint,
+not an images endpoint.
 
 ## The handler is not a static file
 

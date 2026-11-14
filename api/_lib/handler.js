@@ -33,11 +33,14 @@ const GEMINI_RATIOS = [
   "9:16", "16:9", "21:9", "1:4", "4:1", "1:8", "8:1",
 ];
 
+// ai-api lists one Nano Banana id. Quality tiers only exist if the dashboard
+// publishes separate ids; otherwise all three rows use the same model.
+const NANO_MODEL = process.env.AIAPI_MODEL_NANO || "nano-banana-2.1";
 const MODEL_ROWS = [
   { id: "gpt-image-2.5-sunburst", model_id: process.env.AIAPI_MODEL || "", display_name: "GPT Image 2.5 · Sunburst", provider: "aiapi", ratios: Object.keys(SIZES), kind: "images" },
-  { id: "gemini-nano-banana-2.1", model_id: process.env.AIAPI_MODEL_1K || "", display_name: "Nano Banana 2.1 · 1K", provider: "aiapi", ratios: GEMINI_RATIOS, kind: "chat" },
-  { id: "gemini-nano-banana-2.1-2k", model_id: process.env.AIAPI_MODEL_2K || "", display_name: "Nano Banana 2.1 · 2K", provider: "aiapi", ratios: GEMINI_RATIOS, kind: "chat" },
-  { id: "gemini-nano-banana-2.1-4k", model_id: process.env.AIAPI_MODEL_4K || "", display_name: "Nano Banana 2.1 · 4K", provider: "aiapi", ratios: GEMINI_RATIOS, kind: "chat" },
+  { id: "gemini-nano-banana-2.1", model_id: process.env.AIAPI_MODEL_1K || NANO_MODEL, display_name: "Nano Banana 2.1 · 1K", provider: "aiapi", ratios: GEMINI_RATIOS, kind: "chat" },
+  { id: "gemini-nano-banana-2.1-2k", model_id: process.env.AIAPI_MODEL_2K || NANO_MODEL, display_name: "Nano Banana 2.1 · 2K", provider: "aiapi", ratios: GEMINI_RATIOS, kind: "chat" },
+  { id: "gemini-nano-banana-2.1-4k", model_id: process.env.AIAPI_MODEL_4K || NANO_MODEL, display_name: "Nano Banana 2.1 · 4K", provider: "aiapi", ratios: GEMINI_RATIOS, kind: "chat" },
 ];
 
 // Temporarily take models offline by listing their real public ids here.
@@ -171,8 +174,8 @@ module.exports = async function handler(req, res) {
     }
 
     const P = PROVIDERS[provider];
-    if (!P.base) {
-      return json(res, 500, { error: "This model is not available right now." });
+    if (!P.base || !row.model_id) {
+      return json(res, 503, { error: "This model is not configured on the server yet. Pick another model." });
     }
     const keys = keyCandidates(req, provider);
     if (!keys.length) {
