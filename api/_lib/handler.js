@@ -27,7 +27,7 @@ const PROVIDERS = {
 // Provider 1 accepts only these three pixel sizes despite OpenAI's wider docs.
 const SIZES = { "1:1": "1024x1024", "16:9": "1536x864", "9:16": "864x1536" };
 
-// Provider 2 takes 14 ratios and wants the ratio string in `size`, not pixels.
+// Nano Banana on ai-api uses ratio strings; Sunburst uses pixel sizes.
 const GEMINI_RATIOS = [
   "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4",
   "9:16", "16:9", "21:9", "1:4", "4:1", "1:8", "8:1",
@@ -35,9 +35,9 @@ const GEMINI_RATIOS = [
 
 const MODEL_ROWS = [
   { id: "gpt-image-2.5-sunburst", model_id: process.env.AIAPI_MODEL || "", display_name: "GPT Image 2.5 · Sunburst", provider: "aiapi", ratios: Object.keys(SIZES) },
-  { id: "gemini-nano-banana-2.1", model_id: process.env.GOODAPI_MODEL_1K || "", display_name: "Nano Banana 2.1 · 1K", provider: "goodapi", ratios: GEMINI_RATIOS },
-  { id: "gemini-nano-banana-2.1-2k", model_id: process.env.GOODAPI_MODEL_2K || "", display_name: "Nano Banana 2.1 · 2K", provider: "goodapi", ratios: GEMINI_RATIOS },
-  { id: "gemini-nano-banana-2.1-4k", model_id: process.env.GOODAPI_MODEL_4K || "", display_name: "Nano Banana 2.1 · 4K", provider: "goodapi", ratios: GEMINI_RATIOS },
+  { id: "gemini-nano-banana-2.1", model_id: process.env.AIAPI_MODEL_1K || "", display_name: "Nano Banana 2.1 · 1K", provider: "aiapi", ratios: GEMINI_RATIOS },
+  { id: "gemini-nano-banana-2.1-2k", model_id: process.env.AIAPI_MODEL_2K || "", display_name: "Nano Banana 2.1 · 2K", provider: "aiapi", ratios: GEMINI_RATIOS },
+  { id: "gemini-nano-banana-2.1-4k", model_id: process.env.AIAPI_MODEL_4K || "", display_name: "Nano Banana 2.1 · 4K", provider: "aiapi", ratios: GEMINI_RATIOS },
 ];
 
 // Temporarily take models offline by listing their real public ids here.
@@ -179,7 +179,7 @@ module.exports = async function handler(req, res) {
       return json(res, 401, { error: "Add your API key in Settings first." });
     }
 
-    const size = provider === "goodapi"
+    const size = row.id.startsWith("gemini-")
       ? (GEMINI_RATIOS.includes(b.ratio) ? b.ratio : "1:1")
       : SIZES[b.ratio];
 
@@ -188,8 +188,8 @@ module.exports = async function handler(req, res) {
     const mime = { png: "image/png", jpeg: "image/jpeg", jpg: "image/jpeg", webp: "image/webp" }[fmt] || "image/png";
 
     const payload = { model: row.model_id, prompt: b.prompt, n: b.n || 1 };
-    if (provider === "goodapi") payload.response_format = "b64_json";
-    else payload.output_format = fmt;
+    // ai-api serves both models as standard OpenAI image responses.
+    payload.output_format = fmt;
     if (size) payload.size = size;
     if (refs.length) payload.image = refs;
 

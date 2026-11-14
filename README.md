@@ -16,9 +16,8 @@ files, import the repo, set env vars.
 
    | Name | Value |
    |---|---|
-   | `AIAPI_BASE` / `AIAPI_KEY` / `AIAPI_MODEL` | provider 1 |
-   | `GOODAPI_BASE` / `GOODAPI_KEY` | provider 2 |
-   | `GOODAPI_MODEL_1K` / `_2K` / `_4K` | provider 2 model ids |
+   | `AIAPI_BASE` / `AIAPI_KEY` / `AIAPI_MODEL` | provider 1 (Sunburst) |
+   | `AIAPI_MODEL_1K` / `_2K` / `_4K` | Nano Banana model ids on provider 1 |
 
    Paste the non-ASCII model id carefully into Vercel's environment-variable
    value field. No local env file or env-sync script is needed.

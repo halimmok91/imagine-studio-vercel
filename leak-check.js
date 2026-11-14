@@ -52,9 +52,9 @@ async function call(handler, method, url, headers, body) {
       AIAPI_BASE: "http://127.0.0.1:3001",
       GOODAPI_BASE: "http://127.0.0.1:3002",
       AIAPI_MODEL: "gpt-image-2.5-sunburst-按次",
-      GOODAPI_MODEL_1K: "gemini-nano-banana-2.1",
-      GOODAPI_MODEL_2K: "gemini-nano-banana-2.1-2k",
-      GOODAPI_MODEL_4K: "gemini-nano-banana-2.1-4k",
+      AIAPI_MODEL_1K: "gemini-nano-banana-2.1",
+      AIAPI_MODEL_2K: "gemini-nano-banana-2.1-2k",
+      AIAPI_MODEL_4K: "gemini-nano-banana-2.1-4k",
       AIAPI_KEY: "", GOODAPI_KEY: "",
     });
     delete require.cache[require.resolve("./api/_lib/handler.js")];
@@ -98,24 +98,26 @@ async function call(handler, method, url, headers, body) {
     assert.match(s1.received[0].body.toString("latin1"), /name="image\[\]"/);
     assert.match(s1.received[0].body.toString("utf8"), /gpt-image-2\.5-sunburst-按次/);
 
-    // Nano Banana routes to GoodAPI with its real model id and ratio.
+    // Nano Banana now routes to ai-api with its real model id and ratio.
+    s1.received = [];
     s2.received = [];
     res = await call(handler, "POST", "/api/public/v1/generate", auth,
       { prompt: "banana", model_id: "gemini-nano-banana-2.1-2k", ratio: "16:9" });
     assert.strictEqual(res._code, 200, JSON.stringify(res._json));
-    assert.strictEqual(s2.received.length, 1);
-    assert.strictEqual(s2.received[0].url, "/v1/images/generations");
-    const payload = JSON.parse(s2.received[0].body.toString("utf8"));
+    assert.strictEqual(s1.received.length, 1, "Nano Banana uses ai-api");
+    assert.strictEqual(s2.received.length, 0, "GoodAPI is not called");
+    assert.strictEqual(s1.received[0].url, "/v1/images/generations");
+    const payload = JSON.parse(s1.received[0].body.toString("utf8"));
     assert.strictEqual(payload.model, "gemini-nano-banana-2.1-2k");
     assert.strictEqual(payload.size, "16:9");
-    assert.strictEqual(payload.response_format, "b64_json");
+    assert.strictEqual(payload.output_format, "png");
 
     // Upstream errors keep the real message but hide provider host and model id.
     res = await call(handler, "POST", "/api/public/v1/generate",
-      { authorization: "Bearer sk-invalid" },
+      { authorization: "Bearer sk-invalid", "x-requested-with": "fetch" },
       { prompt: "hi", model_id: "gemini-nano-banana-2.1" });
     assert.strictEqual(res._code, 401);
-    assert.match(res._json.error, /无效的令牌/);
+    assert.match(res._json.error, /Invalid token/);
     assert.match(res._json.error, /gemini-nano-banana-2\.1/);
     assert.ok(!/127\.0\.0\.1|goodapi\.click/.test(res._json.error), "error hides upstream host");
 
