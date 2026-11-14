@@ -55,9 +55,9 @@ async function call(handler, method, url, headers, body) {
       AIAPI_BASE: "http://127.0.0.1:3001",
       GOODAPI_BASE: "http://127.0.0.1:3002",
       AIAPI_MODEL: "gpt-image-2.5-sunburst-按次",
-      AIAPI_MODEL_1K: "gemini-nano-banana-2.1",
-      AIAPI_MODEL_2K: "gemini-nano-banana-2.1-2k",
-      AIAPI_MODEL_4K: "gemini-nano-banana-2.1-4k",
+      AIAPI_MODEL_1K: "0",
+      AIAPI_MODEL_2K: "0",
+      AIAPI_MODEL_4K: "0",
       AIAPI_KEY: "", GOODAPI_KEY: "",
     });
     delete require.cache[require.resolve("./api/_lib/handler.js")];
@@ -111,7 +111,7 @@ async function call(handler, method, url, headers, body) {
     assert.strictEqual(s2.received.length, 0, "GoodAPI is not called");
     assert.strictEqual(s1.received[0].url, "/v1/chat/completions");
     const payload = JSON.parse(s1.received[0].body.toString("utf8"));
-    assert.strictEqual(payload.model, "gemini-nano-banana-2.1-2k");
+    assert.strictEqual(payload.model, "nano-banana-2.1");
     assert.match(payload.messages[0].content[0].text, /Aspect ratio: 16:9/);
     assert.deepStrictEqual(res._json.result_urls, ["https://cdn.example/chat-image.png"]);
 

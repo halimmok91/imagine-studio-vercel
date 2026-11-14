@@ -17,8 +17,9 @@ files, import the repo, set env vars.
    | Name | Value |
    |---|---|
    | `AIAPI_BASE` / `AIAPI_KEY` / `AIAPI_MODEL` | provider 1 (Sunburst) |
-   | `AIAPI_MODEL_NANO` | optional; defaults to `nano-banana-2.1` |
-   | `AIAPI_MODEL_1K` / `_2K` / `_4K` | optional; override a tier's model id |
+
+   Nano Banana always uses `nano-banana-2.1`; no Nano Banana model variables
+   are needed.
 
    Paste the non-ASCII model id carefully into Vercel's environment-variable
    value field. No local env file or env-sync script is needed.
