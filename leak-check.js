@@ -16,17 +16,14 @@ function startMock(port, provider) {
       srv.received = srv.received || [];
       srv.received.push({ url: req.url, contentType: req.headers["content-type"] || "", body });
       const isVerify = req.url.endsWith("/models");
-      const isChat = req.url.endsWith("/chat/completions");
       const invalid = req.headers.authorization === "Bearer sk-invalid";
       if (invalid) {
         res.writeHead(401, { "content-type": "application/json" });
-        res.end(JSON.stringify({ error: { message: "Invalid token (request id: abc123)" } }));
+        res.end(JSON.stringify({ error: { message: provider === "goodapi" ? "无效的令牌 (request id: abc123)" : "Invalid token (request id: abc123)" } }));
         return;
       }
       res.writeHead(200, { "content-type": "application/json" });
-      if (isVerify) return res.end(JSON.stringify({ data: [] }));
-      if (isChat) return res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: "Here it is\n![image](https://cdn.example/chat-image.png)" } }] }));
-      res.end(JSON.stringify({ data: [{ url: "https://cdn.example/image.png" }] }));
+      res.end(JSON.stringify(isVerify ? { data: [] } : { data: [{ url: "https://cdn.example/image.png" }] }));
     });
   });
   return new Promise((r) => srv.listen(port, "127.0.0.1", () => r(srv)));
@@ -55,9 +52,9 @@ async function call(handler, method, url, headers, body) {
       AIAPI_BASE: "http://127.0.0.1:3001",
       GOODAPI_BASE: "http://127.0.0.1:3002",
       AIAPI_MODEL: "gpt-image-2.5-sunburst-按次",
-      AIAPI_MODEL_1K: "0",
-      AIAPI_MODEL_2K: "0",
-      AIAPI_MODEL_4K: "0",
+      GOODAPI_MODEL_1K: "gemini-nano-banana-2.1",
+      GOODAPI_MODEL_2K: "gemini-nano-banana-2.1-2k",
+      GOODAPI_MODEL_4K: "gemini-nano-banana-2.1-4k",
       AIAPI_KEY: "", GOODAPI_KEY: "",
     });
     delete require.cache[require.resolve("./api/_lib/handler.js")];
@@ -101,36 +98,24 @@ async function call(handler, method, url, headers, body) {
     assert.match(s1.received[0].body.toString("latin1"), /name="image\[\]"/);
     assert.match(s1.received[0].body.toString("utf8"), /gpt-image-2\.5-sunburst-按次/);
 
-    // Nano Banana routes to ai-api chat/completions, ratio in the prompt.
-    s1.received = [];
+    // Nano Banana routes to GoodAPI with its real model id and ratio.
     s2.received = [];
     res = await call(handler, "POST", "/api/public/v1/generate", auth,
       { prompt: "banana", model_id: "gemini-nano-banana-2.1-2k", ratio: "16:9" });
     assert.strictEqual(res._code, 200, JSON.stringify(res._json));
-    assert.strictEqual(s1.received.length, 1, "Nano Banana uses ai-api");
-    assert.strictEqual(s2.received.length, 0, "GoodAPI is not called");
-    assert.strictEqual(s1.received[0].url, "/v1/chat/completions");
-    const payload = JSON.parse(s1.received[0].body.toString("utf8"));
-    assert.strictEqual(payload.model, "nano-banana-2.1");
-    assert.match(payload.messages[0].content[0].text, /Aspect ratio: 16:9/);
-    assert.deepStrictEqual(res._json.result_urls, ["https://cdn.example/chat-image.png"]);
-
-    // Reference images ride along as inline image_url parts, not an upload.
-    s1.received = [];
-    res = await call(handler, "POST", "/api/public/v1/generate", auth,
-      { prompt: "match this", model_id: "gemini-nano-banana-2.1", images: [PNG_1PX] });
-    assert.strictEqual(res._code, 200, JSON.stringify(res._json));
-    const refPayload = JSON.parse(s1.received[0].body.toString("utf8"));
-    assert.strictEqual(s1.received[0].url, "/v1/chat/completions");
-    assert.strictEqual(refPayload.messages[0].content[1].type, "image_url");
-    assert.strictEqual(refPayload.messages[0].content[1].image_url.url, PNG_1PX);
+    assert.strictEqual(s2.received.length, 1);
+    assert.strictEqual(s2.received[0].url, "/v1/images/generations");
+    const payload = JSON.parse(s2.received[0].body.toString("utf8"));
+    assert.strictEqual(payload.model, "gemini-nano-banana-2.1-2k");
+    assert.strictEqual(payload.size, "16:9");
+    assert.strictEqual(payload.response_format, "b64_json");
 
     // Upstream errors keep the real message but hide provider host and model id.
     res = await call(handler, "POST", "/api/public/v1/generate",
-      { authorization: "Bearer sk-invalid", "x-requested-with": "fetch" },
+      { authorization: "Bearer sk-invalid" },
       { prompt: "hi", model_id: "gemini-nano-banana-2.1" });
     assert.strictEqual(res._code, 401);
-    assert.match(res._json.error, /Invalid token/);
+    assert.match(res._json.error, /无效的令牌/);
     assert.match(res._json.error, /gemini-nano-banana-2\.1/);
     assert.ok(!/127\.0\.0\.1|goodapi\.click/.test(res._json.error), "error hides upstream host");
 

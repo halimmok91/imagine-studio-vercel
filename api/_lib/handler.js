@@ -27,20 +27,17 @@ const PROVIDERS = {
 // Provider 1 accepts only these three pixel sizes despite OpenAI's wider docs.
 const SIZES = { "1:1": "1024x1024", "16:9": "1536x864", "9:16": "864x1536" };
 
-// Nano Banana on ai-api uses ratio strings; Sunburst uses pixel sizes.
+// Provider 2 takes 14 ratios and wants the ratio string in `size`, not pixels.
 const GEMINI_RATIOS = [
   "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4",
   "9:16", "16:9", "21:9", "1:4", "4:1", "1:8", "8:1",
 ];
 
-// ai-api publishes one Nano Banana id; all tiers use it. Tier env vars are
-// intentionally ignored: stale values can otherwise route an invalid id.
-const NANO_MODEL = "nano-banana-2.1";
 const MODEL_ROWS = [
-  { id: "gpt-image-2.5-sunburst", model_id: process.env.AIAPI_MODEL || "", display_name: "GPT Image 2.5 · Sunburst", provider: "aiapi", ratios: Object.keys(SIZES), kind: "images" },
-  { id: "gemini-nano-banana-2.1", model_id: NANO_MODEL, display_name: "Nano Banana 2.1 · 1K", provider: "aiapi", ratios: GEMINI_RATIOS, kind: "chat" },
-  { id: "gemini-nano-banana-2.1-2k", model_id: NANO_MODEL, display_name: "Nano Banana 2.1 · 2K", provider: "aiapi", ratios: GEMINI_RATIOS, kind: "chat" },
-  { id: "gemini-nano-banana-2.1-4k", model_id: NANO_MODEL, display_name: "Nano Banana 2.1 · 4K", provider: "aiapi", ratios: GEMINI_RATIOS, kind: "chat" },
+  { id: "gpt-image-2.5-sunburst", model_id: process.env.AIAPI_MODEL || "", display_name: "GPT Image 2.5 · Sunburst", provider: "aiapi", ratios: Object.keys(SIZES) },
+  { id: "gemini-nano-banana-2.1", model_id: process.env.GOODAPI_MODEL_1K || "", display_name: "Nano Banana 2.1 · 1K", provider: "goodapi", ratios: GEMINI_RATIOS },
+  { id: "gemini-nano-banana-2.1-2k", model_id: process.env.GOODAPI_MODEL_2K || "", display_name: "Nano Banana 2.1 · 2K", provider: "goodapi", ratios: GEMINI_RATIOS },
+  { id: "gemini-nano-banana-2.1-4k", model_id: process.env.GOODAPI_MODEL_4K || "", display_name: "Nano Banana 2.1 · 4K", provider: "goodapi", ratios: GEMINI_RATIOS },
 ];
 
 // Temporarily take models offline by listing their real public ids here.
@@ -174,95 +171,72 @@ module.exports = async function handler(req, res) {
     }
 
     const P = PROVIDERS[provider];
-    if (!P.base || !row.model_id) {
-      return json(res, 503, { error: "This model is not configured on the server yet. Pick another model." });
+    if (!P.base) {
+      return json(res, 500, { error: "This model is not available right now." });
     }
     const keys = keyCandidates(req, provider);
     if (!keys.length) {
       return json(res, 401, { error: "Add your API key in Settings first." });
     }
 
+    const size = provider === "goodapi"
+      ? (GEMINI_RATIOS.includes(b.ratio) ? b.ratio : "1:1")
+      : SIZES[b.ratio];
+
     const refs = (Array.isArray(b.images) ? b.images : []).filter(Boolean).slice(0, 4);
     const fmt = b.output_format || "png";
     const mime = { png: "image/png", jpeg: "image/jpeg", jpg: "image/jpeg", webp: "image/webp" }[fmt] || "image/png";
-    const isChat = row.kind === "chat";
 
-    // ai-api exposes Nano Banana only through chat/completions; Sunburst uses
-    // the standard images API. Two different request shapes.
-    let target, buildBody;
-    if (isChat) {
-      target = P.base + "/v1/chat/completions";
-      const ratio = GEMINI_RATIOS.includes(b.ratio) ? b.ratio : "1:1";
-      const content = [{ type: "text", text: b.prompt + "\n\nAspect ratio: " + ratio }];
-      for (const ref of refs) content.push({ type: "image_url", image_url: { url: ref } });
-      const payload = { model: row.model_id, messages: [{ role: "user", content }] };
-      buildBody = (key) => ({
+    const payload = { model: row.model_id, prompt: b.prompt, n: b.n || 1 };
+    if (provider === "goodapi") payload.response_format = "b64_json";
+    else payload.output_format = fmt;
+    if (size) payload.size = size;
+    if (refs.length) payload.image = refs;
+
+    const target = P.base + (refs.length ? "/v1/images/edits" : "/v1/images/generations");
+
+    function jsonBody(key) {
+      return {
         headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      });
-    } else {
-      target = P.base + (refs.length ? "/v1/images/edits" : "/v1/images/generations");
-      const payload = { model: row.model_id, prompt: b.prompt, n: b.n || 1, output_format: fmt, size: SIZES[b.ratio] };
-      if (refs.length) payload.image = refs;
-      const jsonBody = (key) => ({
-        headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      // OpenAI edits expects image[]; a few relays only read `image`.
-      const multipartBody = (key, fieldName) => {
-        const form = new FormData();
-        form.append("model", payload.model);
-        form.append("prompt", payload.prompt);
-        form.append("n", String(payload.n));
-        if (payload.size) form.append("size", payload.size);
-        form.append("output_format", payload.output_format);
-        refs.forEach((ref) => {
-          const m = /^data:([^;]+);base64,(.*)$/s.exec(ref);
-          const bytes = Buffer.from(m ? m[2] : ref, "base64");
-          form.append(fieldName, new Blob([bytes], { type: m ? m[1] : "image/png" }), "reference.png");
-        });
-        return { headers: { Authorization: "Bearer " + key }, body: form };
       };
-      buildBody = (key, shape) => shape === "json" ? jsonBody(key)
-        : multipartBody(key, shape === "multipart[]" ? "image[]" : "image");
     }
 
-    // Chat completions return images inline as markdown or as message.images.
-    function chatImages(j) {
-      const msg = j?.choices?.[0]?.message || {};
-      const out = [];
-      for (const im of msg.images || []) {
-        const u = im?.image_url?.url || im?.url;
-        if (u) out.push(u);
-      }
-      const texts = [];
-      if (typeof msg.content === "string") texts.push(msg.content);
-      else if (Array.isArray(msg.content)) {
-        for (const part of msg.content) {
-          if (part?.type === "image_url" && part.image_url?.url) out.push(part.image_url.url);
-          if (part?.text) texts.push(part.text);
-        }
-      }
-      for (const t of texts) {
-        for (const m of t.matchAll(/!\[[^\]]*\]\((https?:\/\/[^)\s]+|data:image\/[^)\s]+)\)/g)) out.push(m[1]);
-        for (const m of t.matchAll(/(data:image\/[a-zA-Z+]+;base64,[A-Za-z0-9+/=]+)/g)) out.push(m[1]);
-        for (const m of t.matchAll(/https?:\/\/[^\s"'<>)]+\.(?:png|jpe?g|webp)(?:\?[^\s"'<>)]*)?/gi)) out.push(m[0]);
-      }
-      return [...new Set(out)];
+    // Build the multipart body the OpenAI edits endpoint expects. The refs are
+    // data URLs, so decode each into a real file part.
+    // OpenAI uses image[] for multiple files; a few relays only read `image`.
+    // Both are tried before falling back to JSON.
+    function multipartBody(key, fieldName) {
+      const form = new FormData();
+      form.append("model", payload.model);
+      form.append("prompt", payload.prompt);
+      form.append("n", String(payload.n));
+      if (payload.size) form.append("size", payload.size);
+      if (payload.output_format) form.append("output_format", payload.output_format);
+      if (payload.response_format) form.append("response_format", payload.response_format);
+      refs.forEach((ref) => {
+        const m = /^data:([^;]+);base64,(.*)$/s.exec(ref);
+        const bytes = Buffer.from(m ? m[2] : ref, "base64");
+        form.append(fieldName, new Blob([bytes], { type: m ? m[1] : "image/png" }), "reference.png");
+      });
+      return { headers: { Authorization: "Bearer " + key }, body: form };
     }
 
     let lastErr = "";
     for (let ki = 0; ki < keys.length; ki++) {
       const { key, src, how } = keys[ki];
       const more = ki < keys.length - 1;
-      // multipart with image[], then image, then JSON. Chat models have one shape.
-      const attempts = !isChat && refs.length ? ["multipart[]", "multipart", "json"] : ["json"];
+      // multipart with image[], then image, then JSON. One fallback chain per
+      // key: a relay may reject the field name or the whole encoding.
+      const attempts = refs.length ? ["multipart[]", "multipart", "json"] : ["json"];
       let r = null, text = "", j = null;
       for (const shape of attempts) {
         try {
+          const opts = shape === "json" ? jsonBody(key)
+            : multipartBody(key, shape === "multipart[]" ? "image[]" : "image");
           r = await fetch(target, {
             method: "POST",
-            ...buildBody(key, shape),
+            ...opts,
             // Hobby with Fluid Compute allows 300s. Keep this under vercel.json's
             // maxDuration so Vercel never kills the request before the function
             // can return the upstream error text.
@@ -294,15 +268,10 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      const urls = isChat ? chatImages(j) : ((j && j.data) || [])
+      const urls = ((j && j.data) || [])
         .map((d) => d.b64_json ? "data:" + mime + ";base64," + d.b64_json : d.url)
         .filter(Boolean);
-      if (!urls.length) {
-        const why = isChat && j?.choices?.[0]?.message?.content
-          ? "no image in the reply: " + String(typeof j.choices[0].message.content === "string" ? j.choices[0].message.content : JSON.stringify(j.choices[0].message.content)).slice(0, 300)
-          : "upstream returned no image: " + String(text.slice(0, 300));
-        return json(res, 502, { error: why });
-      }
+      if (!urls.length) return json(res, 502, { error: "upstream returned no image: " + String(text.slice(0, 300)) });
 
       return json(res, 200, { status: "completed", progress: 100, result_urls: urls });
     }

@@ -423,9 +423,9 @@ async function loadModels() {
 // The server no longer sends provider names, so map models locally.
 const PROVIDER_OF = {
   "gpt-image-2.5-sunburst": "aiapi",
-  "gemini-nano-banana-2.1": "aiapi",
-  "gemini-nano-banana-2.1-2k": "aiapi",
-  "gemini-nano-banana-2.1-4k": "aiapi",
+  "gemini-nano-banana-2.1": "goodapi",
+  "gemini-nano-banana-2.1-2k": "goodapi",
+  "gemini-nano-banana-2.1-4k": "goodapi",
 };
 function refreshModels() {
   // Only a successfully tested key enables its provider's models.
