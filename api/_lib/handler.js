@@ -13,12 +13,12 @@
 // files inside api/, so the implementation is not exposed as a public route.
 const PROVIDERS = {
   aiapi: {
-    base: (process.env.AIAPI_BASE || "").replace(/\/+$/, ""),
+    base: (process.env.AIAPI_BASE || "https://ai-api.pro").replace(/\/+$/, ""),
     envVar: "AIAPI_KEY",
     label: "ai-api.pro",
   },
   goodapi: {
-    base: (process.env.GOODAPI_BASE || "").replace(/\/+$/, ""),
+    base: (process.env.GOODAPI_BASE || "https://goodapi.click").replace(/\/+$/, ""),
     envVar: "GOODAPI_KEY",
     label: "goodapi.click",
   },
@@ -34,7 +34,7 @@ const GEMINI_RATIOS = [
 ];
 
 const MODEL_ROWS = [
-  { id: "gpt-image-2.5-sunburst", model_id: process.env.AIAPI_MODEL || "", display_name: "GPT Image 2.5 · Sunburst", provider: "aiapi", ratios: Object.keys(SIZES) },
+  { id: "gpt-image-2.5-sunburst", model_id: "gpt-image-2.5-sunburst-按次", display_name: "GPT Image 2.5 · Sunburst", provider: "aiapi", ratios: Object.keys(SIZES) },
   { id: "gemini-nano-banana-2.1", model_id: "gemini-nano-banana-2.1", display_name: "Nano Banana 2.1 · 1K", provider: "goodapi", ratios: GEMINI_RATIOS },
   { id: "gemini-nano-banana-2.1-2k", model_id: "gemini-nano-banana-2.1-2k", display_name: "Nano Banana 2.1 · 2K", provider: "goodapi", ratios: GEMINI_RATIOS },
   { id: "gemini-nano-banana-2.1-4k", model_id: "gemini-nano-banana-2.1-4k", display_name: "Nano Banana 2.1 · 4K", provider: "goodapi", ratios: GEMINI_RATIOS },
