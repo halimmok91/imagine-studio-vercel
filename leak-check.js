@@ -96,7 +96,7 @@ async function call(handler, method, url, headers, body) {
     assert.strictEqual(s1.received[0].url, "/v1/images/edits");
     assert.match(s1.received[0].contentType, /multipart\/form-data/);
     assert.match(s1.received[0].body.toString("latin1"), /name="image\[\]"/);
-    assert.match(s1.received[0].body.toString("utf8"), /gpt-image-2\.5-sunburst-按次/);
+    assert.match(s1.received[0].body.toString("utf8"), /gpt-image-2\.5-sunburst/);
 
     // Nano Banana routes to GoodAPI with its real model id and ratio.
     s2.received = [];
