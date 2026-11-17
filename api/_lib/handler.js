@@ -34,7 +34,7 @@ const GEMINI_RATIOS = [
 ];
 
 const MODEL_ROWS = [
-  { id: "gpt-image-2.5-sunburst", model_id: "gpt-image-2.5-sunburst", display_name: "GPT Image 2.5 · Sunburst", provider: "aiapi", ratios: Object.keys(SIZES) },
+  { id: "gpt-image-2.5-sunburst", model_id: "gpt-image-2.5-sunburst-按次", display_name: "GPT Image 2.5 · Sunburst", provider: "aiapi", ratios: Object.keys(SIZES) },
   { id: "gemini-nano-banana-2.1", model_id: "gemini-nano-banana-2.1", display_name: "Nano Banana 2.1 · 1K", provider: "goodapi", ratios: GEMINI_RATIOS },
   { id: "gemini-nano-banana-2.1-2k", model_id: "gemini-nano-banana-2.1-2k", display_name: "Nano Banana 2.1 · 2K", provider: "goodapi", ratios: GEMINI_RATIOS },
   { id: "gemini-nano-banana-2.1-4k", model_id: "gemini-nano-banana-2.1-4k", display_name: "Nano Banana 2.1 · 4K", provider: "goodapi", ratios: GEMINI_RATIOS },
@@ -77,30 +77,17 @@ function cleanKey(raw) {
     .trim();
 }
 
-// Every plausible form of the key, in order. Raw beats cleaned: a sanitizer
-// that eats one byte of a valid token looks exactly like a wrong key.
-//
-// Every request uses the caller's own Settings key. Vercel keys are not a
-// fallback: otherwise visitors could spend the site owner's provider balance.
-function keyCandidates(req, provider) {
+// The caller's own Settings key, cleaned of invisible characters. No rotation
+// and no server-key fallback: one request means exactly one upstream call.
+function keyFrom(req) {
   const h = (req.headers["authorization"] || "").replace(/^Bearer\s+/i, "");
-  const out = [];
-  // Settings key first — the customer's own quota.
-  for (const [raw, src] of [[h, "Settings"]]) {
-    if (!raw) continue;
-    if (!out.some((c) => c.key === raw)) out.push({ key: raw, src, how: "as given" });
-    const c = cleanKey(raw);
-    if (c && !out.some((x) => x.key === c)) out.push({ key: c, src, how: "after stripping invisible chars" });
-  }
-  return out;
+  return cleanKey(h);
 }
 
 function maskKey(k) {
   if (!k) return "(none)";
   return k.length <= 12 ? k.slice(0, 3) + "…" : k.slice(0, 6) + "…" + k.slice(-4);
 }
-
-const SRC_LABEL = { Settings: "Settings", env: "Vercel env" };
 
 const json = (res, code, obj) => res.status(code).json(obj);
 
@@ -128,27 +115,25 @@ module.exports = async function handler(req, res) {
   // so probe both. This also tells the user their key still works before they
   // spend a generation finding out.
   if (url === "/api/public/v1/verify" && req.method === "POST") {
-    const keys = keyCandidates(req);
-    if (!keys.length) return json(res, 400, { error: "no key" });
+    const key = keyFrom(req);
+    if (!key) return json(res, 400, { error: "no key" });
     let last = null;
-    for (const { key, src, how } of keys) {
-      for (const name of ["aiapi", "goodapi"]) {
-        const P = PROVIDERS[name];
-        if (!P.base) continue;
-        const hit = { key: maskKey(key), provider: name };
-        try {
-          const r = await fetch(P.base + "/v1/models", {
-            headers: { Authorization: "Bearer " + key },
-            signal: AbortSignal.timeout(12000),
-          });
-          if (r.ok) return json(res, 200, { ok: true, ...hit });
-          const t = await r.text();
-          let m = "";
-          try { m = JSON.parse(t).error?.message || ""; } catch (e) {}
-          last = { ok: false, status: r.status, error: String(m || t.slice(0, 160)), ...hit };
-        } catch (e) {
-          last = { ok: false, status: 0, error: "could not reach the upstream: " + String(e.message), ...hit };
-        }
+    for (const name of ["aiapi", "goodapi"]) {
+      const P = PROVIDERS[name];
+      if (!P.base) continue;
+      const hit = { key: maskKey(key), provider: name };
+      try {
+        const r = await fetch(P.base + "/v1/models", {
+          headers: { Authorization: "Bearer " + key },
+          signal: AbortSignal.timeout(12000),
+        });
+        if (r.ok) return json(res, 200, { ok: true, ...hit });
+        const t = await r.text();
+        let m = "";
+        try { m = JSON.parse(t).error?.message || ""; } catch (e) {}
+        last = { ok: false, status: r.status, error: String(m || t.slice(0, 160)), ...hit };
+      } catch (e) {
+        last = { ok: false, status: 0, error: "could not reach the upstream: " + String(e.message), ...hit };
       }
     }
     return json(res, 200, last);
@@ -174,8 +159,8 @@ module.exports = async function handler(req, res) {
     if (!P.base) {
       return json(res, 500, { error: "This model is not available right now." });
     }
-    const keys = keyCandidates(req, provider);
-    if (!keys.length) {
+    const key = keyFrom(req);
+    if (!key) {
       return json(res, 401, { error: "Add your API key in Settings first." });
     }
 
@@ -222,61 +207,49 @@ module.exports = async function handler(req, res) {
       return { headers: { Authorization: "Bearer " + key }, body: form };
     }
 
-    let lastErr = "";
-    for (let ki = 0; ki < keys.length; ki++) {
-      const { key, src, how } = keys[ki];
-      const more = ki < keys.length - 1;
-      // multipart with image[], then image, then JSON. One fallback chain per
-      // key: a relay may reject the field name or the whole encoding.
-      const attempts = refs.length ? ["multipart[]", "multipart", "json"] : ["json"];
-      let r = null, text = "", j = null;
-      for (const shape of attempts) {
-        try {
-          const opts = shape === "json" ? jsonBody(key)
-            : multipartBody(key, shape === "multipart[]" ? "image[]" : "image");
-          r = await fetch(target, {
-            method: "POST",
-            ...opts,
-            // Hobby with Fluid Compute allows 300s. Keep this under vercel.json's
-            // maxDuration so Vercel never kills the request before the function
-            // can return the upstream error text.
-            signal: AbortSignal.timeout(Number(process.env.UPSTREAM_TIMEOUT_MS) || 240000),
-          });
-          text = await r.text();
-        } catch (e) {
-          if (more) { lastErr = "invalid header: " + String(e.message); r = null; break; }
-          return json(res, 502, { error: "upstream unreachable: " + String(e.message) });
-        }
-
-        j = null;
-        try { j = JSON.parse(text); } catch (e) {}
-
-        if (r.ok) break;
-        lastErr = String((j && (j.error?.message || j.message)) || text.slice(0, 300));
-        // Only retry the other body shape when the rejection looks like a
-        // request-format problem. A 401 is the key, not the shape, so stop.
-        if (r.status === 401) break;
-      }
-      if (!r) continue;
-
-      if (!r.ok) {
-        lastErr = String((j && (j.error?.message || j.message)) || text.slice(0, 300));
-        if (r.status === 401 && more) continue;
-        // Keep the upstream message, but drop provider identity and URLs.
-        return json(res, r.status, {
-          error: lastErr + "\n\nkey sent: " + maskKey(key) + " (" + key.length + " chars, " + how + ") from Settings · model: " + row.id,
+    // multipart with image[], then image, then JSON. A relay may reject the
+    // field name or the whole encoding; that is a format retry, not rotation.
+    const attempts = refs.length ? ["multipart[]", "multipart", "json"] : ["json"];
+    let r = null, text = "", j = null;
+    for (const shape of attempts) {
+      try {
+        const opts = shape === "json" ? jsonBody(key)
+          : multipartBody(key, shape === "multipart[]" ? "image[]" : "image");
+        r = await fetch(target, {
+          method: "POST",
+          ...opts,
+          // Hobby with Fluid Compute allows 300s. Keep this under vercel.json's
+          // maxDuration so Vercel never kills the request before the function
+          // can return the upstream error text.
+          signal: AbortSignal.timeout(Number(process.env.UPSTREAM_TIMEOUT_MS) || 240000),
         });
+        text = await r.text();
+      } catch (e) {
+        return json(res, 502, { error: "upstream unreachable: " + String(e.message) });
       }
 
-      const urls = ((j && j.data) || [])
-        .map((d) => d.b64_json ? "data:" + mime + ";base64," + d.b64_json : d.url)
-        .filter(Boolean);
-      if (!urls.length) return json(res, 502, { error: "upstream returned no image: " + String(text.slice(0, 300)) });
+      j = null;
+      try { j = JSON.parse(text); } catch (e) {}
 
-      return json(res, 200, { status: "completed", progress: 100, result_urls: urls });
+      if (r.ok) break;
+      // A 401 is the key, not the shape, so stop.
+      if (r.status === 401) break;
     }
 
-    return json(res, 502, { error: lastErr || "all keys rejected" });
+    if (!r.ok) {
+      const err = String((j && (j.error?.message || j.message)) || text.slice(0, 300));
+      // Keep the upstream message, but drop provider identity and URLs.
+      return json(res, r.status, {
+        error: err + "\n\nkey sent: " + maskKey(key) + " (" + key.length + " chars) from Settings · model: " + row.id,
+      });
+    }
+
+    const urls = ((j && j.data) || [])
+      .map((d) => d.b64_json ? "data:" + mime + ";base64," + d.b64_json : d.url)
+      .filter(Boolean);
+    if (!urls.length) return json(res, 502, { error: "upstream returned no image: " + String(text.slice(0, 300)) });
+
+    return json(res, 200, { status: "completed", progress: 100, result_urls: urls });
   }
 
   json(res, 404, { error: "no such endpoint: " + url });
