@@ -35,9 +35,9 @@ const GEMINI_RATIOS = [
 
 const MODEL_ROWS = [
   { id: "gpt-image-2.5-sunburst", model_id: process.env.AIAPI_MODEL || "", display_name: "GPT Image 2.5 · Sunburst", provider: "aiapi", ratios: Object.keys(SIZES) },
-  { id: "gemini-nano-banana-2.1", model_id: process.env.GOODAPI_MODEL_1K || "", display_name: "Nano Banana 2.1 · 1K", provider: "goodapi", ratios: GEMINI_RATIOS },
-  { id: "gemini-nano-banana-2.1-2k", model_id: process.env.GOODAPI_MODEL_2K || "", display_name: "Nano Banana 2.1 · 2K", provider: "goodapi", ratios: GEMINI_RATIOS },
-  { id: "gemini-nano-banana-2.1-4k", model_id: process.env.GOODAPI_MODEL_4K || "", display_name: "Nano Banana 2.1 · 4K", provider: "goodapi", ratios: GEMINI_RATIOS },
+  { id: "gemini-nano-banana-2.1", model_id: "gemini-nano-banana-2.1", display_name: "Nano Banana 2.1 · 1K", provider: "goodapi", ratios: GEMINI_RATIOS },
+  { id: "gemini-nano-banana-2.1-2k", model_id: "gemini-nano-banana-2.1-2k", display_name: "Nano Banana 2.1 · 2K", provider: "goodapi", ratios: GEMINI_RATIOS },
+  { id: "gemini-nano-banana-2.1-4k", model_id: "gemini-nano-banana-2.1-4k", display_name: "Nano Banana 2.1 · 4K", provider: "goodapi", ratios: GEMINI_RATIOS },
 ];
 
 // Temporarily take models offline by listing their real public ids here.
