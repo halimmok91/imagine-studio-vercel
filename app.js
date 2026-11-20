@@ -241,6 +241,7 @@ const state = {
   models: [],
   availableModels: [],
   keyProviders: new Set(),
+  keyByProvider: {},   // provider name -> its verified key
   model: null,
   sel: { ratio: "1:1", quality: null, style: "", mode: "" },
   batch: 1,
@@ -403,6 +404,16 @@ const PROVIDER_OF = {
   "gemini-nano-banana-2.1-4k": "goodapi",
   "seedream-5.5": "seedream",
 };
+
+// The key that authorizes a given model's provider. Falls back to the first
+// saved key only when the provider was never verified (shouldn't happen: models
+// only unlock after their provider's key passes verification).
+function keyForModel(modelId) {
+  const provider = PROVIDER_OF[modelId];
+  if (provider && state.keyByProvider[provider]) return state.keyByProvider[provider];
+  return (state.settings.apiKeys || [])[0] || "";
+}
+
 function refreshModels() {
   // Only a successfully tested key enables its provider's models.
   state.availableModels = state.keyProviders.size
@@ -1011,7 +1022,7 @@ function keyTag(key) {
 }
 
 async function startJob(params, idx) {
-  const key = (state.settings.apiKeys || [])[0] || "";
+  const key = keyForModel(params.model);
   const job = {
     id: "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     gid: null,
@@ -1694,7 +1705,10 @@ $("#btnTestKeys").addEventListener("click", async e => {
       const statusEl = row.querySelector(".ktr-status");
       if (data.ok) {
         ok++;
-        if (data.provider) verified.add(data.provider);
+        if (data.provider) {
+          verified.add(data.provider);
+          state.keyByProvider[data.provider] = raw[i];
+        }
         row.classList.add("ktr-ok");
         statusEl.textContent = "OK";
       } else if (data.status === 429) {
@@ -1726,6 +1740,7 @@ $("#btnTestKeys").addEventListener("click", async e => {
 $("#btnSaveSettings").addEventListener("click", () => {
   const raw = $("#apiKeysInput").value.split("\n").map(s => s.trim()).filter(Boolean);
   state.settings.apiKeys = raw;
+  state.keyByProvider = {};
   // baseUrl is deliberately not read from the UI: it stays same-origin so every
   // call goes through the adapter. Changing it in the box would point the
   // browser straight at the upstream with a key in the request.
