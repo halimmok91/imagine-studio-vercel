@@ -251,8 +251,6 @@ const state = {
   gallerySearch: "",
   galleryTags: [],
   refSeq: 0,
-  keyIdx: 0,
-  workingKeys: new Set(),
   sort: "newest"
 };
 
@@ -283,27 +281,6 @@ function arNum(ratio) {
   if (!ratio) return 1;
   const [a, b] = ratio.split(":").map(Number);
   return a && b ? a / b : 1;
-}
-
-// Round-robin: returns next API key (cycling), or "" if none set.
-function nextKey() {
-  const keys = state.settings.apiKeys || [];
-  if (!keys.length) return { key: "", idx: -1 };
-  // Resume rotation from where we left off (persisted), default 0.
-  if (typeof state.keyIdx !== "number" || isNaN(state.keyIdx)) state.keyIdx = 0;
-  const idx = state.keyIdx % keys.length;
-  state.keyIdx = (state.keyIdx + 1) % keys.length;
-  try { localStorage.setItem("imagine.keyIdx", String(state.keyIdx)); } catch (e) {}
-  return { key: keys[idx], idx };
-}
-
-function keyIdxOf(key) {
-  if (key === undefined || key === null) return -1;
-  // key can be an object {key, idx} from nextKey, or a raw string
-  if (typeof key === "object") return key.idx;
-  // Use the LAST occurrence so duplicate keys map to their real (later) position.
-  const idx = (state.settings.apiKeys || []).lastIndexOf(key);
-  return idx;
 }
 
 // ---- Request log ----
@@ -338,12 +315,9 @@ $("#btnClearLog")?.addEventListener("click", () => { reqLog.length = 0; renderRe
 async function api(path, opts = {}) {
   const base = state.settings.baseUrl.replace(/\/+$/, "");
   const headers = { "X-Requested-With": "fetch", ...(opts.headers || {}) };
-  // Explicit key (for parallel batch) wins; otherwise rotate round-robin.
-  let keyObj;
-  if (opts._key !== undefined) {
-    keyObj = { key: opts._key, idx: opts._keyIdx !== undefined ? opts._keyIdx : keyIdxOf(opts._key) };
-  } else keyObj = nextKey();
-  const key = keyObj ? keyObj.key : "";
+  // Always the first saved key. No rotation: every job uses the same key.
+  const key = opts._key !== undefined ? opts._key : (state.settings.apiKeys || [])[0] || "";
+  const keyObj = { key, idx: 0 };
   if (key) headers.Authorization = `Bearer ${key}`;
   const { _key, _keyIdx, ...fetchOpts } = opts;
   let res;
@@ -1035,13 +1009,13 @@ function keyTag(key) {
 }
 
 async function startJob(params, idx) {
-  const keyObj = nextKey();
+  const key = (state.settings.apiKeys || [])[0] || "";
   const job = {
     id: "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     gid: null,
     params,
-    key: keyObj.key,   // pin this job to its own key (round-robin)
-    keyIdx: keyObj.idx,
+    key,
+    keyIdx: 0,
     progress: 0,
     start: Date.now(),
     retries: 0,
@@ -1110,7 +1084,6 @@ async function startJob(params, idx) {
       // generation_id and polled; a serverless function cannot hold job state
       // between invocations, so this waits for the image in one request.
       job.gid = "gen_" + Date.now().toString(36);
-      state.workingKeys.add(job.key);
       job.progress = 100;
       const urls = data.result_urls || data.urls || [];
       if (urls.length) finishJob(job, urls);
@@ -1751,7 +1724,6 @@ $("#btnTestKeys").addEventListener("click", async e => {
 $("#btnSaveSettings").addEventListener("click", () => {
   const raw = $("#apiKeysInput").value.split("\n").map(s => s.trim()).filter(Boolean);
   state.settings.apiKeys = raw;
-  state.keyIdx = 0;
   // baseUrl is deliberately not read from the UI: it stays same-origin so every
   // call goes through the adapter. Changing it in the box would point the
   // browser straight at the upstream with a key in the request.
@@ -1765,7 +1737,7 @@ $("#btnSaveSettings").addEventListener("click", () => {
   kvPut("baseUrl", state.settings.baseUrl);
   kvPut("autoSave", state.settings.autoSave ? "1" : "0");
   closeSettings();
-  toast(`Settings saved — ${raw.length} API key${raw.length === 1 ? "" : "s"} in rotation. Test keys to enable their models.`, "success");
+  toast(`Settings saved — ${raw.length} API key${raw.length === 1 ? "" : "s"}. The first key is used. Test keys to enable their models.`, "success");
   loadModels();
 });
 
@@ -2159,7 +2131,6 @@ document.addEventListener("keydown", e => {
   try { localStorage.removeItem(LS.base); } catch (e) {}
   try { state.settings.autoSave = localStorage.getItem("imagine.autoSave") !== "0"; } catch (e) { state.settings.autoSave = true; }
   try { state.settings.saveFolder = localStorage.getItem("imagine.saveFolder") || ""; } catch (e) { state.settings.saveFolder = ""; }
-  try { state.keyIdx = parseInt(localStorage.getItem("imagine.keyIdx") || "0", 10) || 0; } catch (e) { state.keyIdx = 0; }
   try { state.batch = Math.max(1, Math.min(4, parseInt(localStorage.getItem(LS.batch) || "1", 10) || 1)); } catch (e) { state.batch = 1; }
   state.delayMs = 5000;
   try { state.seq = localStorage.getItem(LS.seq) === "1"; } catch (e) { state.seq = false; }

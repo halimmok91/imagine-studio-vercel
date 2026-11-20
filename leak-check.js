@@ -98,6 +98,26 @@ async function call(handler, method, url, headers, body) {
     assert.match(s1.received[0].body.toString("latin1"), /name="image\[\]"/);
     assert.match(s1.received[0].body.toString("utf8"), /gpt-image-2\.5-sunburst/);
 
+    // A non-format upstream error must make exactly one request. Retrying quota
+    // or server errors through all three body shapes makes failures repeatable.
+    s1.received = [];
+    const failOnce = s1.listeners("request")[0];
+    s1.removeAllListeners("request");
+    s1.on("request", (req, res2) => {
+      req.resume();
+      req.on("end", () => {
+        s1.received.push({ url: req.url });
+        res2.writeHead(500, { "content-type": "application/json" });
+        res2.end(JSON.stringify({ error: { message: "upstream test failure" } }));
+      });
+    });
+    res = await call(handler, "POST", "/api/public/v1/generate", auth,
+      { prompt: "one request only", model_id: "gpt-image-2.5-sunburst", images: [PNG_1PX] });
+    assert.strictEqual(res._code, 500);
+    assert.strictEqual(s1.received.length, 1, "500 must not retry other shapes");
+    s1.removeAllListeners("request");
+    s1.on("request", failOnce);
+
     // Nano Banana routes to GoodAPI with its real model id and ratio.
     s2.received = [];
     res = await call(handler, "POST", "/api/public/v1/generate", auth,

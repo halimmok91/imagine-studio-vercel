@@ -232,8 +232,9 @@ module.exports = async function handler(req, res) {
       try { j = JSON.parse(text); } catch (e) {}
 
       if (r.ok) break;
-      // A 401 is the key, not the shape, so stop.
-      if (r.status === 401) break;
+      // Only 400 may be a body-format rejection. Everything else is a real
+      // upstream answer: retrying quota/moderation errors spends more calls.
+      if (r.status !== 400) break;
     }
 
     if (!r.ok) {
