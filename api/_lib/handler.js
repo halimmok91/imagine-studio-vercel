@@ -1,5 +1,7 @@
 "use strict";
 
+const { randomUUID } = require("crypto");
+
 // Serverless port of the desktop adapter. Two differences from the desktop
 // build, both forced by Vercel:
 //   1. No shared memory between invocations, so `generate` is SYNCHRONOUS. The
@@ -22,6 +24,11 @@ const PROVIDERS = {
     envVar: "GOODAPI_KEY",
     label: "goodapi.click",
   },
+  seedream: {
+    base: (process.env.SEEDREAM_BASE || "https://xinfeng.best").replace(/\/+$/, ""),
+    envVar: "SEEDREAM_KEY",
+    label: "xinfeng.best",
+  },
 };
 
 // Provider 1 accepts only these three pixel sizes despite OpenAI's wider docs.
@@ -33,11 +40,26 @@ const GEMINI_RATIOS = [
   "9:16", "16:9", "21:9", "1:4", "4:1", "1:8", "8:1",
 ];
 
+// Seedream 5.5 publishes fixed pixel sizes per ratio (square + 2k only).
+const SEEDREAM_SIZES = {
+  "1:1": "2048x2048",
+  "4:3": "2368x1776",
+  "3:4": "1776x2368",
+  "16:9": "2816x1584",
+  "9:16": "1584x2816",
+  "3:2": "2496x1664",
+  "2:3": "1664x2496",
+  "21:9": "3136x1344",
+  "9:21": "1344x3136",
+};
+const SEEDREAM_RATIOS = Object.keys(SEEDREAM_SIZES);
+
 const MODEL_ROWS = [
   { id: "gpt-image-2.5-sunburst", model_id: "gpt-image-2.5-sunburst-按次", display_name: "GPT Image 2.5 · Sunburst", provider: "aiapi", ratios: Object.keys(SIZES) },
   { id: "gemini-nano-banana-2.1", model_id: "gemini-nano-banana-2.1", display_name: "Nano Banana 2.1 · 1K", provider: "goodapi", ratios: GEMINI_RATIOS },
   { id: "gemini-nano-banana-2.1-2k", model_id: "gemini-nano-banana-2.1-2k", display_name: "Nano Banana 2.1 · 2K", provider: "goodapi", ratios: GEMINI_RATIOS },
   { id: "gemini-nano-banana-2.1-4k", model_id: "gemini-nano-banana-2.1-4k", display_name: "Nano Banana 2.1 · 4K", provider: "goodapi", ratios: GEMINI_RATIOS },
+  { id: "seedream-5.5", model_id: "Seedream 5.5", display_name: "Seedream 5.5 · 2K", provider: "seedream", ratios: SEEDREAM_RATIOS },
 ];
 
 // Temporarily take models offline by listing their real public ids here.
@@ -118,7 +140,7 @@ module.exports = async function handler(req, res) {
     const key = keyFrom(req);
     if (!key) return json(res, 400, { error: "no key" });
     let last = null;
-    for (const name of ["aiapi", "goodapi"]) {
+    for (const name of ["aiapi", "goodapi", "seedream"]) {
       const P = PROVIDERS[name];
       if (!P.base) continue;
       const hit = { key: maskKey(key), provider: name };
@@ -166,25 +188,30 @@ module.exports = async function handler(req, res) {
 
     const size = provider === "goodapi"
       ? (GEMINI_RATIOS.includes(b.ratio) ? b.ratio : "1:1")
-      : SIZES[b.ratio];
+      : provider === "seedream"
+        ? (SEEDREAM_SIZES[b.ratio] || SEEDREAM_SIZES["1:1"])
+        : SIZES[b.ratio];
 
     const refs = (Array.isArray(b.images) ? b.images : []).filter(Boolean).slice(0, 4);
     const fmt = b.output_format || "png";
     const mime = { png: "image/png", jpeg: "image/jpeg", jpg: "image/jpeg", webp: "image/webp" }[fmt] || "image/png";
 
     const payload = { model: row.model_id, prompt: b.prompt, n: b.n || 1 };
-    if (provider === "goodapi") payload.response_format = "b64_json";
+    if (provider === "goodapi" || provider === "seedream") payload.response_format = "b64_json";
     else payload.output_format = fmt;
+    if (provider === "seedream") payload.quality = "standard";
     if (size) payload.size = size;
-    if (refs.length) payload.image = refs;
+    if (provider === "seedream") {
+      if (refs.length) payload.images = refs.map((r) => ({ image_url: r }));
+    } else if (refs.length) payload.image = refs;
 
     const target = P.base + (refs.length ? "/v1/images/edits" : "/v1/images/generations");
 
     function jsonBody(key) {
-      return {
-        headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      };
+      const headers = { Authorization: "Bearer " + key, "Content-Type": "application/json" };
+      // Seedream tasks are idempotent per logical request: a fresh key per task.
+      if (provider === "seedream") headers["Idempotency-Key"] = randomUUID();
+      return { headers, body: JSON.stringify(payload) };
     }
 
     // Build the multipart body the OpenAI edits endpoint expects. The refs are
@@ -209,7 +236,9 @@ module.exports = async function handler(req, res) {
 
     // multipart with image[], then image, then JSON. A relay may reject the
     // field name or the whole encoding; that is a format retry, not rotation.
-    const attempts = refs.length ? ["multipart[]", "multipart", "json"] : ["json"];
+    // Seedream uses JSON image_url refs, so it has a single shape.
+    const attempts = provider === "seedream" ? ["json"]
+      : refs.length ? ["multipart[]", "multipart", "json"] : ["json"];
     let r = null, text = "", j = null;
     for (const shape of attempts) {
       try {

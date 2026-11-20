@@ -14,7 +14,7 @@ function startMock(port, provider) {
     req.on("end", () => {
       const body = Buffer.concat(chunks);
       srv.received = srv.received || [];
-      srv.received.push({ url: req.url, contentType: req.headers["content-type"] || "", body });
+      srv.received.push({ url: req.url, contentType: req.headers["content-type"] || "", idempotency: req.headers["idempotency-key"] || "", body });
       const isVerify = req.url.endsWith("/models");
       const invalid = req.headers.authorization === "Bearer sk-invalid";
       if (invalid) {
@@ -47,15 +47,17 @@ async function call(handler, method, url, headers, body) {
 (async () => {
   const s1 = await startMock(3001, "aiapi");
   const s2 = await startMock(3002, "goodapi");
+  const s3 = await startMock(3003, "seedream");
   try {
     Object.assign(process.env, {
       AIAPI_BASE: "http://127.0.0.1:3001",
       GOODAPI_BASE: "http://127.0.0.1:3002",
+      SEEDREAM_BASE: "http://127.0.0.1:3003",
       AIAPI_MODEL: "gpt-image-2.5-sunburst-按次",
       GOODAPI_MODEL_1K: "gemini-nano-banana-2.1",
       GOODAPI_MODEL_2K: "gemini-nano-banana-2.1-2k",
       GOODAPI_MODEL_4K: "gemini-nano-banana-2.1-4k",
-      AIAPI_KEY: "", GOODAPI_KEY: "",
+      AIAPI_KEY: "", GOODAPI_KEY: "", SEEDREAM_KEY: "",
     });
     delete require.cache[require.resolve("./api/_lib/handler.js")];
     const handler = require("./api/_lib/handler.js");
@@ -84,6 +86,7 @@ async function call(handler, method, url, headers, body) {
       "gemini-nano-banana-2.1",
       "gemini-nano-banana-2.1-2k",
       "gemini-nano-banana-2.1-4k",
+      "seedream-5.5",
     ]);
 
     // Reference images use edits and arrive as multipart image[] on first try.
@@ -130,6 +133,21 @@ async function call(handler, method, url, headers, body) {
     assert.strictEqual(payload.size, "16:9");
     assert.strictEqual(payload.response_format, "b64_json");
 
+    // Seedream routes to xinfeng with its own size, quality and JSON refs.
+    s3.received = [];
+    res = await call(handler, "POST", "/api/public/v1/generate", auth,
+      { prompt: "seedream me", model_id: "seedream-5.5", ratio: "16:9", images: [PNG_1PX] });
+    assert.strictEqual(res._code, 200, JSON.stringify(res._json));
+    assert.strictEqual(s3.received.length, 1);
+    assert.strictEqual(s3.received[0].url, "/v1/images/edits");
+    const sd = JSON.parse(s3.received[0].body.toString("utf8"));
+    assert.strictEqual(sd.model, "Seedream 5.5");
+    assert.strictEqual(sd.size, "2816x1584");
+    assert.strictEqual(sd.quality, "standard");
+    assert.strictEqual(sd.response_format, "b64_json");
+    assert.deepStrictEqual(sd.images, [{ image_url: PNG_1PX }]);
+    assert.ok(s3.received[0].idempotency, "Seedream request carries an Idempotency-Key");
+
     // Upstream errors keep the real message but hide provider host and model id.
     res = await call(handler, "POST", "/api/public/v1/generate",
       { authorization: "Bearer sk-invalid" },
@@ -154,9 +172,9 @@ async function call(handler, method, url, headers, body) {
     assert.strictEqual(res._json.site, undefined, "verify hides the site name");
     assert.strictEqual(res._json.base, undefined, "verify hides the base URL");
 
-    console.log("self-check: OK (hidden metadata, raw upstream messages, Nano Banana routing, multipart references)");
+    console.log("self-check: OK (hidden metadata, raw upstream messages, Nano Banana routing, multipart references, Seedream JSON refs)");
   } finally {
-    await Promise.all([new Promise((r) => s1.close(r)), new Promise((r) => s2.close(r))]);
+    await Promise.all([new Promise((r) => s1.close(r)), new Promise((r) => s2.close(r)), new Promise((r) => s3.close(r))]);
   }
 })().catch((e) => {
   console.error("self-check FAILED\n" + (e && e.stack ? e.stack : e));

@@ -229,11 +229,12 @@ const FALLBACK_MODELS = [
   { id: "gpt-image-2.5-sunburst", display_name: "GPT Image 2.5 · Sunburst", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1", "16:9", "9:16"], styles: [] },
   { id: "gemini-nano-banana-2.1", display_name: "Nano Banana 2.1 · 1K", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9","1:4","4:1","1:8","8:1"], styles: [] },
   { id: "gemini-nano-banana-2.1-2k", display_name: "Nano Banana 2.1 · 2K", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9","1:4","4:1","1:8","8:1"], styles: [] },
-  { id: "gemini-nano-banana-2.1-4k", display_name: "Nano Banana 2.1 · 4K", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9","1:4","4:1","1:8","8:1"], styles: [] }
+  { id: "gemini-nano-banana-2.1-4k", display_name: "Nano Banana 2.1 · 4K", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9","1:4","4:1","1:8","8:1"], styles: [] },
+  { id: "seedream-5.5", display_name: "Seedream 5.5 · 2K", enabled: true, supports_reference_images: true, max_reference_images: 4, qualities: [], ratios: ["1:1","4:3","3:4","16:9","9:16","3:2","2:3","21:9","9:21"], styles: [] }
 ];
 
 // Only these models are shown in the app.
-const ALLOWED_MODELS = new Set(["gpt-image-2.5-sunburst", "gemini-nano-banana-2.1", "gemini-nano-banana-2.1-2k", "gemini-nano-banana-2.1-4k"]);
+const ALLOWED_MODELS = new Set(["gpt-image-2.5-sunburst", "gemini-nano-banana-2.1", "gemini-nano-banana-2.1-2k", "gemini-nano-banana-2.1-4k", "seedream-5.5"]);
 
 const state = {
   settings: { apiKeys: [], baseUrl: REAL_BASE, autoSave: true, saveFolder: "" },
@@ -400,6 +401,7 @@ const PROVIDER_OF = {
   "gemini-nano-banana-2.1": "goodapi",
   "gemini-nano-banana-2.1-2k": "goodapi",
   "gemini-nano-banana-2.1-4k": "goodapi",
+  "seedream-5.5": "seedream",
 };
 function refreshModels() {
   // Only a successfully tested key enables its provider's models.
