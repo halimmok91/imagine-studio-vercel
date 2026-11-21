@@ -1739,8 +1739,13 @@ $("#btnTestKeys").addEventListener("click", async e => {
 
 $("#btnSaveSettings").addEventListener("click", () => {
   const raw = $("#apiKeysInput").value.split("\n").map(s => s.trim()).filter(Boolean);
+  const changed = raw.join("\n") !== (state.settings.apiKeys || []).join("\n");
   state.settings.apiKeys = raw;
-  state.keyByProvider = {};
+  // Keep the verified provider->key mapping from "Test all keys" instead of
+  // wiping it: it is exactly what keyForModel() needs to authorize each model
+  // with its own provider's key. Only clear it when the key list itself
+  // changed, so a stale mapping can never point at a removed key.
+  if (changed) state.keyByProvider = {};
   // baseUrl is deliberately not read from the UI: it stays same-origin so every
   // call goes through the adapter. Changing it in the box would point the
   // browser straight at the upstream with a key in the request.
